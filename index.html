@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>贝塔科技 - 组织效能驾驶舱</title>
+    <!-- 引入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 配置前端模块映射表 -->
+    <script type="importmap">
+    {
+        "imports": {
+            "react": "https://esm.sh/react@18.2.0",
+            "react/jsx-runtime": "https://esm.sh/react@18.2.0/jsx-runtime",
+            "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+            "lucide-react": "https://esm.sh/lucide-react@0.300.0"
+        }
+    }
+    </script>
+    <!-- 引入 Babel 实时编译 JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #475569; }
+    </style>
+</head>
+<body class="bg-[#0B1120] text-slate-200 antialiased overflow-x-auto">
+    <div id="root"></div>
+
+    <script type="text/babel" data-type="module">
+        import React, { useState, useEffect, useRef } from 'react';
+        import { createRoot } from 'react-dom/client';
+        import { 
+            Briefcase, Calendar, FileCog, Sparkles, Loader2, UploadCloud, 
+            ShieldAlert, AlertTriangle, X, Edit2, Save, UserMinus, SearchX, 
+            ChevronDown, BrainCircuit, Key, TrendingUp, Target, Plus, Trash2,
+            Activity, PieChart, LineChart, Settings, Users
+        } from 'lucide-react';
+
+        // ============================================================================
+        // 1. 基础配置与系统锚点
+        // ============================================================================
+        const CURRENT_DATE = new Date('2026-06-18');
+
+        const calculateEmploymentDetails = (entryDateStr, baseType) => {
+            if (!entryDateStr) return { status: baseType, duration: '未知' };
+            const entryDate = new Date(entryDateStr);
+            const diffMonths = Math.abs(CURRENT_DATE - entryDate) / (1000 * 60 * 60 * 24 * 30);
+            
+            let duration = diffMonths < 1 ? `${Math.ceil(diffMonths * 30)}天` : `${Math.floor(diffMonths)}个月`;
+            if (diffMonths >= 12) duration = `${(diffMonths / 12).toFixed(1)}年`;
+
+            let status = baseType;
+            if (baseType === '正式员工' || baseType === '试用期') {
+                if (diffMonths <= 3) status = '试用一期';
+                else if (diffMonths <= 6) status = '试用二期';
+                else status = '正式';
+            } else if (baseType === '实习生') {
+                status = '实习';
+            }
+            return { status, duration };
+        };
+
+        const defaultScoringTemplates = [
+            {
+                id: "tpl_level_intern", name: "关卡策划实习生考核标准",
+                rules: [
+                    { id: "r1", name: "单次不达标", penalty: -5, type: "negative", tags: ["执行力不足"] },
+                    { id: "r2", name: "连续两周不达标", penalty: -10, type: "negative", tags: ["学习敏锐度低"] },
+                    { id: "r3", name: "连续两周以上不达标", penalty: -15, type: "negative", tags: ["建议汰换"] },
+                    { id: "r4", name: "严重不达标(<80%)", penalty: -10, type: "negative", tags: ["产出不合格"] },
+                    { id: "r6", name: "超额完成原创关卡", penalty: +5, type: "positive", tags: ["积极自驱"] }
+                ]
+            },
+            {
+                id: "tpl_lead_designer", name: "主策划通用考核标准",
+                rules: [
+                    { id: "ld1", name: "核心系统架构失误", penalty: -15, type: "negative", tags: ["设计缺陷"] },
+                    { id: "ld2", name: "版本进度严重延期", penalty: -10, type: "negative", tags: ["统筹不力"] }
+                ]
+            },
+            {
+                id: "tpl_sys_designer", name: "系统策划考核标准",
+                rules: [
+                    { id: "sd1", name: "案子逻辑漏洞致返工", penalty: -10, type: "negative", tags: ["逻辑不严密"] },
+                    { id: "sd3", name: "主动优化老旧系统", penalty: +5, type: "positive", tags: ["自驱力"] }
+                ]
+            },
+            {
+                id: "tpl_programmer", name: "程序研发考核标准",
+                rules: [
+                    { id: "pg1", name: "引发线上严重Bug", penalty: -20, type: "negative", tags: ["严重事故"] },
+                    { id: "pg3", name: "解决底层性能瓶颈", penalty: +10, type: "positive", tags: ["技术攻坚"] }
+                ]
+            },
+            {
+                id: "tpl_qa", name: "测试(QA)考核标准",
+                rules: [
+                    { id: "qa1", name: "发生严重漏测", penalty: -15, type: "negative", tags: ["漏测事故"] },
+                    { id: "qa3", name: "提前拦截致命崩溃", penalty: +10, type: "positive", tags: ["质量卫士"] }
+                ]
+            }
+        ];
+
+        // ============================================================================
+        // 2. 初始架构数据底座 (全量31人)
+        // ============================================================================
+        const initialTeamArchitecture = {
+            producer: { 
+                id: "p1", name: "任光谦", role: "制作人", type: "正式员工", entryDate: "2020-03-01",
+                score: 100, talentTag: "核心骨干", age: 34, school: "武汉大学", education: "本科", salary: "100000", dynamicTags: ["统筹全局"] 
+            },
+            departments: [
+                {
+                    id: "dept_design", name: "策划部", isSpanning: true,
+                    lead: { id: "c1", name: "陈冠兰", role: "主策划", type: "正式员工", entryDate: "2021-06-15", score: 100, talentTag: "核心骨干", age: 30, school: "华中科技大学", education: "本科", salary: "35000" },
+                    branches: [
+                        { title: "系统策划", members: [
+                            { id: "c2", name: "朱琰", role: "系统策划", type: "正式员工", entryDate: "2023-05-10", score: 100, age: 26, school: "中南民族大学", education: "本科", salary: "18000" },
+                            { id: "c3", name: "杨帆", role: "系统策划", type: "正式员工", entryDate: "2024-11-01", score: 100, age: 28, school: "未知", education: "大专", salary: "16000" },
+                            { id: "c4", name: "王琳轲", role: "系统策划(待入职)", type: "正式员工", entryDate: "2026-07-01", score: 100, age: 24, school: "未知", education: "本科", salary: "15000", talentTag: "待入职" }
+                        ]},
+                        { title: "数值策划", members: [
+                            { id: "c8", name: "蔡玉林", role: "数值策划", type: "正式员工", entryDate: "2023-08-20", score: 100, age: 27, school: "哈尔滨工业大学", education: "硕士", salary: "28000", talentTag: "重点高潜" }
+                        ]},
+                        { title: "活动策划", members: [
+                            { id: "c6", name: "李青玉", role: "活动策划", type: "正式员工", entryDate: "2025-02-14", score: 100, age: 25, school: "北京林业大学", education: "本科", salary: "14000" },
+                            { id: "c7", name: "刘子康", role: "活动策划(待离职)", type: "正式员工", entryDate: "2024-05-10", score: 55, age: 26, school: "未知", education: "本科", salary: "15000", talentTag: "待离职" }
+                        ]},
+                        { title: "关卡策划", members: [
+                            { id: "c9", name: "王昶越", role: "关卡组长", type: "正式员工", entryDate: "2022-04-10", score: 100, age: 29, school: "武汉理工大学", education: "本科", salary: "25000" },
+                            { id: "c10", name: "徐皓翔", role: "关卡策划", type: "正式员工", entryDate: "2024-07-15", score: 85, age: 25, school: "未知", education: "本科", salary: "15000" },
+                            { id: "c11", name: "吴彧斐", role: "关卡实习生", type: "实习生", entryDate: "2026-06-01", score: 75, age: 22, school: "湖北大学", education: "本科", salary: "4000" },
+                            { id: "c12", name: "张文欣", role: "关卡策划", type: "正式员工", entryDate: "2023-11-20", score: 100, age: 26, school: "未知", education: "本科", salary: "16000" },
+                            { id: "c13", name: "陈天宇", role: "关卡实习生", type: "实习生", entryDate: "2026-05-15", score: 100, age: 23, school: "未知", education: "本科", salary: "4000" },
+                            { id: "c14", name: "吕妍妍", role: "关卡实习生", type: "实习生", entryDate: "2026-06-10", score: 100, age: 22, school: "中南财经政法大学", education: "本科", salary: "4000" }
+                        ]}
+                    ]
+                },
+                {
+                    id: "dept_tech", name: "程序部", isSpanning: false,
+                    lead: { id: "t1", name: "戴佳文", role: "客户端主程", type: "正式员工", entryDate: "2022-01-05", score: 100, age: 32, school: "电子科技大学", education: "本科", salary: "40000" },
+                    roles: [
+                        { title: "客户端开发", members: [
+                            { id: "t2", name: "刘澎", role: "客户端开发", type: "正式员工", entryDate: "2024-03-10", score: 65, age: 31, school: "中北大学", education: "本科", salary: "29000" },
+                            { id: "t3", name: "白冰", role: "客户端开发", type: "正式员工", entryDate: "2025-10-15", score: 100, age: 29, school: "景德镇陶瓷大学", education: "本科", salary: "25000" },
+                            { id: "t4", name: "石泽堃", role: "客户端开发", type: "正式员工", entryDate: "2023-07-01", score: 100, age: 28, school: "未知", education: "本科", salary: "24000" },
+                            { id: "t5", name: "薛保平", role: "客户端开发", type: "正式员工", entryDate: "2024-02-18", score: 100, age: 30, school: "未知", education: "本科", salary: "26000" }
+                        ]}
+                    ]
+                },
+                {
+                    id: "dept_qa", name: "测试部", isSpanning: false,
+                    lead: { id: "q1", name: "刘禹杭", role: "测试组长", type: "正式员工", entryDate: "2023-07-01", score: 100, age: 28, school: "未知", education: "本科", salary: "20000" },
+                    roles: [
+                        { title: "测试执行", members: [
+                            { id: "q2", name: "牟书含", role: "测试工程师", type: "正式员工", entryDate: "2024-08-10", score: 100, age: 26, school: "未知", education: "本科", salary: "15000" },
+                            { id: "q3", name: "李松岩", role: "测试工程师", type: "正式员工", entryDate: "2025-03-20", score: 100, age: 27, school: "未知", education: "本科", salary: "14500" },
+                            { id: "q4", name: "张鑫晨", role: "测试实习生", type: "实习生", entryDate: "2026-05-01", score: 100, age: 22, school: "未知", education: "本科", salary: "3000" }
+                        ]}
+                    ]
+                },
+                {
+                    id: "dept_art", name: "美术部", isSpanning: false,
+                    lead: { id: "a1", isVacant: true, role: "主美 (待招)" },
+                    roles: [
+                        { title: "原画", members: [
+                            { id: "a4", name: "张蕴秀", role: "原画师", type: "正式员工", entryDate: "2023-02-15", score: 100, age: 27, school: "湖北美术学院", education: "本科", salary: "18000" }
+                        ]},
+                        { title: "动效", members: [
+                            { id: "a2", name: "孙伟轩", role: "动效设计师", type: "正式员工", entryDate: "2022-11-10", score: 100, age: 29, school: "未知", education: "本科", salary: "22000" },
+                            { id: "a3", name: "韩博", role: "外派动效", type: "正式员工", entryDate: "2024-01-05", score: 100, age: 28, school: "未知", education: "本科", salary: "20000", talentTag: "外派" }
+                        ]}
+                    ]
+                },
+                {
+                    id: "dept_market", name: "市场部", isSpanning: false,
+                    lead: null,
+                    roles: [
+                        { title: "视频与买量", members: [
+                            { id: "m1", name: "任博伟", role: "视频设计师", type: "正式员工", entryDate: "2023-06-20", score: 100, age: 28, school: "未知", education: "本科", salary: "21000" },
+                            { id: "m2", name: "杨靖雯", role: "视频设计师", type: "正式员工", entryDate: "2025-04-12", score: 100, age: 25, school: "未知", education: "本科", salary: "16000" }
+                        ]},
+                        { title: "投放", members: [
+                            { id: "m4", name: "张卓良", role: "投放优化师", type: "正式员工", entryDate: "2024-09-01", score: 100, age: 27, school: "未知", education: "本科", salary: "23000" }
+                        ]},
+                        { title: "运营", members: [
+                            { id: "m6", name: "邢昊阳", role: "游戏运营", type: "正式员工", entryDate: "2023-03-15", score: 100, age: 26, school: "未知", education: "本科", salary: "18000" }
+                        ]}
+                    ]
+                }
+            ]
+        };
+
+        const parseAIResponse = (text) => {
+            try {
+                let cleanText = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+                const firstBrace = cleanText.indexOf('{');
+                const lastBrace = cleanText.lastIndexOf('}');
+                if (firstBrace !== -1 && lastBrace !== -1) {
+                    cleanText = cleanText.substring(firstBrace, lastBrace + 1);
+                }
+                return JSON.parse(cleanText);
+            } catch (e) {
+                console.error("JSON解析失败:", text);
+                throw new Error("解析AI返回数据失败，请重试或更换模型。");
+            }
+        };
+
+        // ============================================================================
+        // 3. 主应用程序
+        // ============================================================================
+        function App() {
+            // 顶层导航与大盘数据
+            const [activeTab, setActiveTab] = useState('kanban'); 
+            const [data, setData] = useState(initialTeamArchitecture);
+            const [resignedStaff, setResignedStaff] = useState([]); 
+            const [scoringTemplates, setScoringTemplates] = useState(defaultScoringTemplates);
+
+            // API 配置状态
+            const [sfApiKey, setSfApiKey] = useState(localStorage.getItem('sf_api_key') || "");
+            const [sfModel, setSfModel] = useState(localStorage.getItem('sf_model') || "deepseek-ai/DeepSeek-V3");
+
+            // UI 弹窗控制
+            const [selectedUser, setSelectedUser] = useState(null);
+            const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+            const [isEditingProfile, setIsEditingProfile] = useState(false);
+            const [showSettingsModal, setShowSettingsModal] = useState(false);
+            const [showResignModal, setShowResignModal] = useState(false);
+            const [resignReason, setResignReason] = useState("");
+
+            // 打分与记录面板状态
+            const [observation, setObservation] = useState("");
+            const [selectedRule, setSelectedRule] = useState(null);
+            const [scoreMode, setScoreMode] = useState('rule'); 
+            const [manualScoreChange, setManualScoreChange] = useState(""); 
+
+            // AI 交互状态
+            const [aiInputText, setAiInputText] = useState("");
+            const [isAiGenerating, setIsAiGenerating] = useState(false);
+            const [isParsingFile, setIsParsingFile] = useState(false);
+            
+            // 策略中枢状态
+            const [strategyInput, setStrategyInput] = useState("");
+            const [strategyReport, setStrategyReport] = useState(null);
+            const [isStrategyLoading, setIsStrategyLoading] = useState(false);
+
+            // 模板创建状态
+            const [isCreatingTpl, setIsCreatingTpl] = useState(false);
+            const [newTplName, setNewTplName] = useState("");
+            const [newTplRules, setNewTplRules] = useState([]);
+            const [draftRuleName, setDraftRuleName] = useState("");
+            const [draftRulePenalty, setDraftRulePenalty] = useState("");
+
+            const getTeamMetrics = () => {
+                let totalMonthlyCost = 0;
+                let riskCount = 0;
+                let headcount = 0;
+                let validScoreCount = 0;
+                let totalScore = 0;
+
+                const processUser = (user) => {
+                    if (user.isVacant || user.talentTag === '待入职') return;
+                    headcount++;
+                    if (user.score !== undefined) {
+                        totalScore += Number(user.score);
+                        validScoreCount++;
+                        if (Number(user.score) < 80) riskCount++;
+                    }
+                    if (user.salary && user.salary !== "未知") {
+                        const num = parseInt(user.salary.toString().replace(/,/g, ''), 10);
+                        if (!isNaN(num) && num > 1000) totalMonthlyCost += num; 
+                    }
+                };
+
+                processUser(data.producer);
+                data.departments.forEach(dept => {
+                    if(dept.lead) processUser(dept.lead);
+                    if(dept.roles) dept.roles.forEach(r => r.members.forEach(processUser));
+                    if(dept.branches) dept.branches.forEach(b => b.members.forEach(processUser));
+                });
+
+                return { headcount, avgScore: validScoreCount ? (totalScore/validScoreCount).toFixed(1) : 0, totalMonthlyCost: totalMonthlyCost.toLocaleString(), riskCount };
+            };
+
+            const fetchSiliconFlowAPI = async (systemPrompt, userPrompt) => {
+                if (!sfApiKey) throw new Error("API_KEY_MISSING");
+                const response = await fetch("https://api.siliconflow.cn/v1/chat/completions", {
+                    method: "POST",
+                    headers: { "Authorization": `Bearer ${sfApiKey}`, "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        model: sfModel,
+                        messages: [ { role: "system", content: systemPrompt }, { role: "user", content: userPrompt } ],
+                        response_format: { type: "text" } 
+                    })
+                });
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.message || "API 请求失败");
+                }
+                const result = await response.json();
+                return result.choices[0].message.content;
+            };
+
+            const updateGlobalUser = (updatedUser) => {
+                setSelectedUser(updatedUser);
+                const newData = { ...data };
+                if (newData.producer.id === updatedUser.id) {
+                    newData.producer = updatedUser;
+                } else {
+                    newData.departments = newData.departments.map(dept => {
+                        if (dept.lead && dept.lead.id === updatedUser.id) return { ...dept, lead: updatedUser };
+                        if (dept.isSpanning) {
+                            return { ...dept, branches: dept.branches.map(b => ({ ...b, members: b.members.map(m => m.id === updatedUser.id ? updatedUser : m) })) };
+                        } else {
+                            return { ...dept, roles: dept.roles.map(r => ({ ...r, members: r.members.map(m => m.id === updatedUser.id ? updatedUser : m) })) };
+                        }
+                    });
+                }
+                setData(newData);
+            };
+
+            const handleGenerateAIProfile = async () => {
+                if (!aiInputText.trim()) return;
+                setIsAiGenerating(true);
+                const sysPrompt = `你是一位专业的游戏行业HRBP。请根据用户提供的资料，提取结构化的【基础人才画像】。直接输出合法的JSON，不要Markdown代码块。格式：
+{"summary": "50字以内评价", "tags": ["标签1", "标签2"], "icebergAbove": [{"skill": "硬技能", "level": "及格/较差/优秀", "desc": "佐证"}], "icebergBelow": [{"trait": "软素质", "score": "分值/表现", "desc": "佐证"}]}`;
+                try {
+                    const content = await fetchSiliconFlowAPI(sysPrompt, aiInputText);
+                    const profileData = parseAIResponse(content);
+                    updateGlobalUser({ ...selectedUser, aiProfile: profileData });
+                    setAiInputText("");
+                } catch (err) {
+                    if (err.message === "API_KEY_MISSING") alert("请先前往右上角配置库填写 硅基流动 API Key！");
+                    else alert("解析失败: " + err.message);
+                } finally {
+                    setIsAiGenerating(false);
+                }
+            };
+
+            const handleGenerateStrategy = async () => {
+                if (!strategyInput.trim()) return;
+                setIsStrategyLoading(true);
+                let highRiskStaff = [];
+                const checkUser = (u) => { if(u && !u.isVacant && Number(u.score)<80) highRiskStaff.push(`${u.name}(${u.role}, ${u.score}分)`) };
+                checkUser(data.producer);
+                data.departments.forEach(d => {
+                    checkUser(d.lead);
+                    if(d.isSpanning) d.branches.forEach(b => b.members.forEach(checkUser));
+                    else d.roles.forEach(r => r.members.forEach(checkUser));
+                });
+                const sysPrompt = `你是一位顶尖的OD专家。根据现状及目标，输出JSON格式推演报告，不要Markdown：
+{"feasibility": "高/中/低", "riskAnalysis": "痛点与爆雷风险分析(100字)", "actions": [{"type": "内部调整", "desc": "行动建议"}, {"type": "外部招聘", "desc": "建议"}]}`;
+                const userPrompt = `【目标】：${strategyInput}\n【高危卡点人员】：${highRiskStaff.join('; ') || '无'}\n请帮我出具干预策略。`;
+                try {
+                    const content = await fetchSiliconFlowAPI(sysPrompt, userPrompt);
+                    setStrategyReport(parseAIResponse(content));
+                } catch (err) {
+                    if (err.message === "API_KEY_MISSING") alert("请先前往右上角配置库填写 硅基流动 API Key！");
+                    else alert("推演失败: " + err.message);
+                } finally {
+                    setIsStrategyLoading(false);
+                }
+            };
+
+            const fileInputRef = useRef(null);
+            const handleFileUpload = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                setIsParsingFile(true);
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    let content = event.target.result;
+                    if (content.includes('<html')) {
+                        const doc = new DOMParser().parseFromString(content, 'text/html');
+                        content = doc.body.textContent.replace(/\s+/g, ' ').trim();
+                    }
+                    if (/\x00/.test(content)) content = `[文件二进制流: ${file.name}]`;
+                    setAiInputText(content);
+                    setIsParsingFile(false);
+                };
+                reader.onerror = () => { alert("读取失败"); setIsParsingFile(false); };
+                reader.readAsText(file);
+            };
+
+            const handleSubmitScore = () => {
+                let penalty = scoreMode === 'rule' ? (selectedRule?.penalty || 0) : Number(manualScoreChange);
+                if (isNaN(penalty) || penalty === 0 || !observation.trim()) return alert("请完整填写事实备注！");
+
+                const newBehavior = { 
+                    date: CURRENT_DATE.toISOString().split('T')[0], 
+                    desc: `【${scoreMode==='rule'?selectedRule.name:'手动调整'}】 ${observation}`, 
+                    penalty: penalty, 
+                    type: penalty < 0 ? 'negative' : 'positive' 
+                };
+                
+                const newScore = Math.min(100, Math.max(0, (Number(selectedUser.score) || 100) + penalty));
+                updateGlobalUser({
+                    ...selectedUser,
+                    score: newScore,
+                    behaviors: [newBehavior, ...(selectedUser.behaviors || [])],
+                    dynamicTags: Array.from(new Set([...(selectedUser.dynamicTags || []), ...(selectedRule?.tags || [])]))
+                });
+                
+                setObservation(""); setSelectedRule(null); setManualScoreChange("");
+            };
+
+            const handleConfirmResign = () => {
+                if(!resignReason) return alert("请填写原因");
+                setResignedStaff([...resignedStaff, {...selectedUser, resignDate: CURRENT_DATE.toISOString().split('T')[0], resignReason}]);
+                
+                const newData = { ...data };
+                newData.departments = newData.departments.map(dept => {
+                    if (dept.lead?.id === selectedUser.id) return { ...dept, lead: { id: `vacant_${Math.random()}`, isVacant: true, role: `${dept.name}负责人(待招)` } };
+                    if (dept.isSpanning) return { ...dept, branches: dept.branches.map(b => ({ ...b, members: b.members.filter(m => m.id !== selectedUser.id) })) };
+                    return { ...dept, roles: dept.roles.map(r => ({ ...r, members: r.members.filter(m => m.id !== selectedUser.id) })) };
+                });
+                setData(newData);
+                setIsDrawerOpen(false); setShowResignModal(false); setResignReason("");
+            };
+
+            const handleDeleteTemplate = (id) => {
+                setScoringTemplates(scoringTemplates.filter(t => t.id !== id));
+            };
+
+            const handleAddDraftRule = () => {
+                if (!draftRuleName.trim() || !draftRulePenalty) return;
+                setNewTplRules([...newTplRules, { id: `r_${Math.random()}`, name: draftRuleName, penalty: Number(draftRulePenalty), type: Number(draftRulePenalty) < 0 ? "negative" : "positive", tags: [] }]);
+                setDraftRuleName(""); setDraftRulePenalty("");
+            };
+
+            const handleSaveNewTemplate = () => {
+                if (!newTplName.trim()) return alert("请输入名称");
+                setScoringTemplates([...scoringTemplates, { id: `tpl_${Math.random()}`, name: newTplName, rules: newTplRules }]);
+                setIsCreatingTpl(false); setNewTplName(""); setNewTplRules([]);
+            };
+
+            const getStatusBadge = (status) => {
+                if (status === '正式') return <span className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded text-[10px]">正式员工</span>;
+                if (status === '试用一期') return <span className="bg-orange-500/20 text-orange-400 border border-orange-500/30 px-2 py-0.5 rounded text-[10px]">试用(一期)</span>;
+                if (status === '试用二期') return <span className="bg-amber-500/20 text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded text-[10px]">试用(二期)</span>;
+                if (status === '实习') return <span className="bg-sky-500/20 text-sky-400 border border-sky-500/30 px-2 py-0.5 rounded text-[10px]">实习生</span>;
+                return <span className="bg-slate-700 text-slate-300 px-2 py-0.5 rounded text-[10px]">{status}</span>;
+            };
+
+            const EmployeeCard = ({ user }) => {
+                if (user.isVacant) return <div className="p-2 rounded-lg border border-dashed border-slate-600 bg-slate-900/40 opacity-70"><span className="text-[11px] text-slate-400">{user.role}</span></div>;
+
+                const score = Number(user.score);
+                let classes = "bg-slate-900 border-slate-700 hover:border-slate-500", txtClass = "text-slate-100", scoreCls = "text-green-400 bg-slate-950 border-slate-800";
+                let Icon = null;
+
+                if (!isNaN(score)) {
+                    if (score < 60) {
+                        classes = "bg-red-950/30 border-red-900/60 ring-1 ring-red-500/50 shadow-[0_0_10px_rgba(239,68,68,0.2)]"; txtClass = "text-red-400"; scoreCls = "text-red-400 bg-red-950 border-red-900/50 font-bold";
+                        Icon = <ShieldAlert className="absolute -top-2 -right-2 w-5 h-5 text-red-500 bg-[#0B1120] rounded-full" />;
+                    } else if (score < 80) {
+                        classes = "bg-yellow-950/20 border-yellow-800/50 ring-1 ring-yellow-500/40 shadow-[0_0_10px_rgba(234,179,8,0.1)]"; txtClass = "text-yellow-400"; scoreCls = "text-yellow-400 bg-yellow-950 border-yellow-900/50 font-bold";
+                        Icon = <AlertTriangle className="absolute -top-1.5 -right-1.5 w-4 h-4 text-yellow-500 bg-[#0B1120] rounded-full" />;
+                    }
+                }
+                if (user.talentTag === '待离职') txtClass = "text-red-500/70 line-through";
+
+                return (
+                    <div onClick={() => {if(!user.isVacant){setSelectedUser(user); setIsDrawerOpen(true);}}} className={`relative flex flex-col p-2.5 rounded-lg border cursor-pointer transition-all ${classes} ${user.talentTag==='待入职'?'opacity-70 border-dashed':''}`}>
+                        {Icon}
+                        <div className="flex justify-between items-center w-full mb-1.5">
+                            <span className={`text-[14px] font-bold whitespace-nowrap transition-colors ${txtClass}`}>{user.name}</span>
+                            {user.score !== undefined && <span className={`text-[11px] whitespace-nowrap px-1.5 py-0.5 rounded border transition-colors ${scoreCls}`}>{score}分</span>}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-1.5 w-full">
+                            {getStatusBadge(calculateEmploymentDetails(user.entryDate, user.type).status)}
+                            {user.talentTag && <span className="text-[10px] text-slate-400 max-w-[80px] truncate">{user.talentTag}</span>}
+                            {user.aiProfile && <Sparkles className="w-3 h-3 text-blue-400 ml-auto animate-pulse" title="已生成画像" />}
+                        </div>
+                    </div>
+                );
+            };
+
+            return (
+                <div className="min-h-screen p-6">
+                    {/* Header */}
+                    <div className="flex justify-between items-end border-b border-slate-800/80 pb-5 mb-6 min-w-[1500px]">
+                        <div>
+                            <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent flex items-center gap-3">
+                                <Briefcase className="w-8 h-8 text-blue-500" /> 纸牌项目组 · 人才阵型大盘
+                            </h1>
+                            <div className="text-slate-400 mt-4 flex items-center gap-6">
+                                <span className="flex items-center gap-1.5"><Calendar className="w-4 h-4 text-slate-500"/> 系统时间: <strong className="text-slate-300">2026-06-18</strong></span>
+                                <span className="flex items-center gap-1.5 text-yellow-500/80 text-xs"><span className="inline-block w-2 h-2 bg-yellow-500 rounded-full"></span> 警告 (&lt;80分)</span>
+                                <span className="flex items-center gap-1.5 text-red-500/80 text-xs"><span className="inline-block w-2 h-2 bg-red-500 rounded-full"></span> 淘汰预警 (&lt;60分)</span>
+                                <div className="ml-4 flex bg-slate-900 rounded-lg p-1 border border-slate-800">
+                                    <button onClick={()=>setActiveTab('kanban')} className={`px-4 py-1.5 rounded text-sm font-bold transition-all ${activeTab==='kanban' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'}`}>排兵布阵大盘</button>
+                                    <button onClick={()=>setActiveTab('strategy')} className={`px-4 py-1.5 rounded text-sm font-bold flex items-center gap-1.5 transition-all ${activeTab==='strategy' ? 'bg-purple-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'}`}><BrainCircuit className="w-4 h-4"/> AI HRBP 策略中枢</button>
+                                </div>
+                            </div>
+                        </div>
+                        <button onClick={() => setShowSettingsModal(true)} className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-sm border border-slate-700">
+                            <FileCog className="w-4 h-4"/> API 与考核配置库
+                        </button>
+                    </div>
+
+                    {/* Tab 1: Kanban 架构大盘 */}
+                    {activeTab === 'kanban' && (
+                        <div className="w-full pb-20 min-w-[2000px]">
+                            <div className="flex justify-center mb-10 relative">
+                                <div className="w-64 bg-gradient-to-b from-blue-900/20 to-slate-900 rounded-xl p-1 shadow-lg border border-blue-700/30 relative z-10">
+                                    <div className="bg-slate-900 rounded-lg p-3 flex flex-col items-center justify-center cursor-pointer hover:bg-slate-800" onClick={() => handleUserClick(data.producer)}>
+                                        <div className="text-[10px] text-blue-400 font-bold mb-1 uppercase tracking-widest">{data.producer.role}</div>
+                                        <div className="font-bold text-lg text-slate-100 mb-1">{data.producer.name}</div>
+                                        <div className="flex gap-2 text-xs"><span className="text-slate-400">{data.producer.score}分</span><span className="text-orange-400">{data.producer.talentTag}</span></div>
+                                    </div>
+                                </div>
+                                <div className="absolute top-full left-1/2 w-px h-10 bg-slate-700"></div>
+                            </div>
+
+                            <div className="flex gap-6 items-start justify-center">
+                                {/* 策划部跨列树状渲染 */}
+                                <div className="w-[850px] shrink-0 rounded-2xl border border-blue-500/30 bg-gradient-to-b from-blue-900/10 to-slate-900/50 flex flex-col shadow-xl">
+                                    <div className="p-2.5 font-bold text-[13px] text-center tracking-widest bg-blue-950/60 text-blue-300 border-b border-blue-500/20 rounded-t-2xl">策划研发中枢</div>
+                                    <div className="p-5 flex flex-col items-center relative">
+                                        <div className="w-56 mb-8 relative z-10 group"><EmployeeCard user={data.departments[0].lead} /><div className="absolute left-1/2 top-full w-px h-8 bg-blue-500/30"></div></div>
+                                        <div className="w-[85%] border-t border-blue-500/30 relative h-6">
+                                            <div className="absolute top-0 left-0 w-px h-6 bg-blue-500/30"></div><div className="absolute top-0 left-[33.33%] w-px h-6 bg-blue-500/30"></div><div className="absolute top-0 left-[66.66%] w-px h-6 bg-blue-500/30"></div><div className="absolute top-0 right-0 w-px h-6 bg-blue-500/30"></div>
+                                        </div>
+                                        <div className="w-full grid grid-cols-4 gap-4">
+                                            {data.departments[0].branches.map((b, idx) => (
+                                                <div key={idx} className="flex flex-col gap-2"><div className="text-[11px] font-bold text-blue-200/50 flex items-center bg-slate-900/80 rounded-md px-2 py-1.5 border border-slate-800">{b.title}</div>{b.members.map(m => <EmployeeCard key={m.id} user={m} />)}</div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* 平行部门 */}
+                                <div className="flex gap-4 shrink-0">
+                                    {data.departments.slice(1).map((dept) => (
+                                        <div key={dept.id} className="w-[240px] shrink-0 rounded-2xl border border-slate-700/60 bg-slate-900/40 flex flex-col shadow-lg">
+                                            <div className="p-2.5 font-bold text-[13px] text-center tracking-widest bg-slate-800/80 text-slate-300 border-b border-slate-700/60 rounded-t-2xl">{dept.name}</div>
+                                            <div className="p-4 flex flex-col gap-4">
+                                                {dept.lead && <div className="relative pb-4 border-b border-slate-700/50 mb-1 group"><EmployeeCard user={dept.lead} /></div>}
+                                                {dept.roles.map((r, rIdx) => (
+                                                    <div key={rIdx} className="flex flex-col gap-2"><div className="text-[10px] font-bold text-slate-500 flex items-center border-b border-slate-800 pb-1 mb-1"><span className="uppercase">{r.title}</span></div>{r.members.map(m => <EmployeeCard key={m.id} user={m} />)}</div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* 流失库 */}
+                            {resignedStaff.length > 0 && (
+                                <div className="mt-20 pt-8 border-t border-dashed border-slate-800 max-w-[1500px] mx-auto">
+                                    <h2 className="text-lg font-bold text-slate-500 flex items-center gap-2 mb-6"><SearchX className="w-5 h-5"/> 离职与流失复盘库</h2>
+                                    <div className="flex flex-wrap gap-4">
+                                        {resignedStaff.map((staff, idx) => (
+                                            <div key={idx} className="w-64 bg-slate-900/40 border border-slate-800 p-4 rounded-xl grayscale opacity-70 hover:grayscale-0 hover:opacity-100 transition-all">
+                                                <div className="font-bold text-slate-300 border-b border-slate-800/80 pb-2 mb-2">{staff.name} <span className="text-xs text-slate-500 font-normal ml-2">{staff.role}</span></div>
+                                                <div className="text-xs text-slate-400 space-y-1.5">
+                                                    <div><span className="text-slate-600">离职时间：</span>{staff.resignDate}</div>
+                                                    <div><span className="text-slate-600">历史分值：</span>{staff.score}分</div>
+                                                    <div className="text-red-400/80 bg-red-950/20 p-2 rounded mt-2 border border-red-900/30"><strong className="text-red-400">原因：</strong>{staff.resignReason}</div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Tab 2: AI HRBP 策略中枢 */}
+                    {activeTab === 'strategy' && (
+                        <div className="max-w-[1200px] pb-20 animate-in fade-in duration-500">
+                            <div className="grid grid-cols-4 gap-4 mb-6">
+                                <div className="bg-slate-900 border border-slate-700/60 p-5 rounded-xl shadow-lg">
+                                    <div className="flex items-center gap-2 text-slate-400 text-xs mb-2"><Users className="w-4 h-4"/> 团队在编总人数</div>
+                                    <div className="text-3xl font-bold text-white">{getTeamMetrics().headcount} <span className="text-sm font-normal text-slate-500">人</span></div>
+                                </div>
+                                <div className="bg-slate-900 border border-slate-700/60 p-5 rounded-xl shadow-lg">
+                                    <div className="flex items-center gap-2 text-slate-400 text-xs mb-2"><LineChart className="w-4 h-4"/> 预估月度基本硬成本</div>
+                                    <div className="text-3xl font-bold text-emerald-400">¥ {getTeamMetrics().totalMonthlyCost}</div>
+                                    <div className="text-[10px] text-slate-500 mt-1">仅基于底座工资粗算，不含绩效</div>
+                                </div>
+                                <div className="bg-slate-900 border border-slate-700/60 p-5 rounded-xl shadow-lg">
+                                    <div className="flex items-center gap-2 text-slate-400 text-xs mb-2"><PieChart className="w-4 h-4"/> 团队平均效能健康度</div>
+                                    <div className="text-3xl font-bold text-blue-400">{getTeamMetrics().avgScore} <span className="text-sm font-normal text-slate-500">分</span></div>
+                                </div>
+                                <div className="bg-red-950/20 border border-red-900/40 p-5 rounded-xl shadow-lg">
+                                    <div className="flex items-center gap-2 text-red-400/80 text-xs mb-2"><ShieldAlert className="w-4 h-4"/> 状态异常/高危人数</div>
+                                    <div className="text-3xl font-bold text-red-400">{getTeamMetrics().riskCount} <span className="text-sm font-normal text-red-500/70">人 (&lt;80分)</span></div>
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-3 gap-6">
+                                <div className="col-span-1 bg-slate-900 border border-slate-700 rounded-xl p-5 shadow-lg flex flex-col">
+                                    <h3 className="text-sm font-bold text-slate-200 mb-4 flex items-center gap-2"><Target className="w-4 h-4 text-purple-400"/> 输入业务挑战与目标</h3>
+                                    <textarea value={strategyInput} onChange={(e) => setStrategyInput(e.target.value)} className="w-full flex-1 bg-slate-950 border border-slate-700 rounded-lg p-3 text-sm text-slate-300 outline-none focus:border-purple-500 resize-none leading-relaxed mb-4" placeholder="例如：本月需要完成底层网络重构，我们的程序团队能扛得住吗？" />
+                                    <button onClick={handleGenerateStrategy} disabled={isStrategyLoading || !strategyInput.trim()} className="w-full flex justify-center items-center gap-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-bold py-3 rounded-lg text-sm shadow-[0_0_15px_rgba(147,51,234,0.3)] transition-all">
+                                        {isStrategyLoading ? <Loader2 className="w-5 h-5 animate-spin"/> : <BrainCircuit className="w-5 h-5"/>} {isStrategyLoading ? "深度推演中..." : "召唤 AI HRBP 生成推演报告"}
+                                    </button>
+                                </div>
+                                <div className="col-span-2 bg-[#0F172A] border border-slate-700 rounded-xl p-6 shadow-xl relative overflow-hidden">
+                                    <h3 className="text-lg font-bold text-slate-100 mb-6 flex items-center gap-2 z-10 relative"><Sparkles className="w-5 h-5 text-purple-400"/> AI 组织排兵布阵方案</h3>
+                                    {!strategyReport ? (
+                                        <div className="flex flex-col items-center justify-center h-64 opacity-50"><BrainCircuit className="w-16 h-16 text-slate-600 mb-4"/><p className="text-sm text-slate-400">录入左侧业务背景，AI 将结合大盘分数输出干预策略。</p></div>
+                                    ) : (
+                                        <div className="space-y-6 animate-in fade-in">
+                                            <p className="text-sm text-slate-300 bg-purple-950/20 border border-purple-900/30 p-4 rounded-lg">目标达成可行性：<strong className={strategyReport.feasibility==='高'?'text-green-400':strategyReport.feasibility==='低'?'text-red-400':'text-yellow-400'}>{strategyReport.feasibility}</strong><br/><br/>{strategyReport.riskAnalysis}</p>
+                                            <div>
+                                                <h4 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">破局行动指南</h4>
+                                                <div className="space-y-3">
+                                                    {strategyReport.actions?.map((act, idx) => (
+                                                        <div key={idx} className="bg-slate-900 border border-slate-700 p-3 rounded-lg flex items-start gap-3"><div className="bg-slate-800 text-purple-400 text-[10px] font-bold px-2 py-1 rounded border border-slate-700 whitespace-nowrap">{act.type}</div><div className="text-sm text-slate-300 leading-relaxed">{act.desc}</div></div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 侧边抽屉: 员工详情 (5大模块) */}
+                    {isDrawerOpen && selectedUser && (
+                        <>
+                            <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-40 transition-opacity" onClick={() => setIsDrawerOpen(false)}></div>
+                            <div className="fixed top-0 right-0 h-full w-full md:w-[700px] bg-[#0F172A] border-l border-slate-700 shadow-2xl z-50 flex flex-col">
+                                <div className="p-6 border-b border-slate-800 bg-slate-900/80 flex justify-between items-start">
+                                    <div>
+                                        <h2 className="text-2xl font-bold text-white flex items-center gap-3">
+                                            {selectedUser.name}
+                                            {Number(selectedUser.score) < 60 && <span className="bg-red-500/20 text-red-400 border border-red-500/30 text-xs px-2 py-0.5 rounded flex items-center gap-1"><ShieldAlert className="w-3 h-3"/> 淘汰预警</span>}
+                                            {Number(selectedUser.score) >= 60 && Number(selectedUser.score) < 80 && <span className="bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 text-xs px-2 py-0.5 rounded flex items-center gap-1"><AlertTriangle className="w-3 h-3"/> 状态警告</span>}
+                                        </h2>
+                                        <div className="text-slate-400 mt-1.5 flex items-center gap-3 text-sm">
+                                            <span className="font-medium">{selectedUser.role}</span><span className="text-slate-600">|</span>
+                                            <span className={`font-bold ${Number(selectedUser.score) < 60 ? 'text-red-400' : Number(selectedUser.score) < 80 ? 'text-yellow-400' : 'text-green-400'}`}>{selectedUser.score}分</span>
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <button onClick={() => setIsEditingProfile(!isEditingProfile)} className={`p-2 rounded-lg transition-colors border ${isEditingProfile ? 'bg-blue-600 text-white border-blue-500' : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'}`}>{isEditingProfile ? <Save className="w-4 h-4" onClick={() => updateGlobalUser(selectedUser)} /> : <Edit2 className="w-4 h-4" />}</button>
+                                        <button onClick={() => setShowResignModal(true)} className="p-2 bg-red-950/40 text-red-400 hover:text-red-300 border border-red-900/50 hover:bg-red-900/60 rounded-lg transition-colors" title="办理离职/淘汰"><UserMinus className="w-4 h-4" /></button>
+                                        <button onClick={() => setIsDrawerOpen(false)} className="text-slate-400 hover:text-white p-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg transition-colors"><X className="w-4 h-4" /></button>
+                                    </div>
+                                </div>
+                                <div className="flex-1 overflow-y-auto p-6 space-y-7 custom-scrollbar bg-slate-950/30">
+                                    {/* 模块1 */}
+                                    <div className="bg-slate-900 rounded-xl border border-slate-700/60 p-5 shadow-sm">
+                                        <h3 className="text-[11px] font-bold text-slate-400 mb-5 flex items-center gap-2 uppercase tracking-widest">1. 基础档案 (实时司龄引擎)</h3>
+                                        {isEditingProfile ? (
+                                            <div className="grid grid-cols-2 gap-4 text-sm">
+                                                <div><label className="block text-[10px] text-slate-500 mb-1">姓名</label><input type="text" value={selectedUser.name} onChange={e=>setSelectedUser({...selectedUser, name: e.target.value})} className="w-full bg-slate-950 border border-slate-700 p-2 rounded text-white outline-none focus:border-blue-500" /></div>
+                                                <div><label className="block text-[10px] text-slate-500 mb-1">合同用工类型</label><select value={selectedUser.type} onChange={e=>setSelectedUser({...selectedUser, type: e.target.value})} className="w-full bg-slate-950 border border-slate-700 p-2 rounded text-white outline-none"><option value="正式员工">正式员工</option><option value="实习生">实习生</option></select></div>
+                                                <div><label className="block text-[10px] text-slate-500 mb-1 text-blue-400">入职日期 (更改将重算司龄)</label><input type="date" value={selectedUser.entryDate} onChange={e=>setSelectedUser({...selectedUser, entryDate: e.target.value})} className="w-full bg-blue-950/20 border border-blue-900/50 p-2 rounded text-blue-200 outline-none focus:border-blue-500" /></div>
+                                                <div><label className="block text-[10px] text-slate-500 mb-1">标签 (如:待离职/核心)</label><input type="text" value={selectedUser.talentTag || ''} onChange={e=>setSelectedUser({...selectedUser, talentTag: e.target.value})} className="w-full bg-slate-950 border border-slate-700 p-2 rounded text-white outline-none focus:border-blue-500" /></div>
+                                                <div><label className="block text-[10px] text-slate-500 mb-1">薪资水平</label><input type="text" value={selectedUser.salary || ''} onChange={e=>setSelectedUser({...selectedUser, salary: e.target.value})} className="w-full bg-slate-950 border border-slate-700 p-2 rounded text-emerald-400 font-mono outline-none" /></div>
+                                                <div><label className="block text-[10px] text-slate-500 mb-1">最高学历</label><select value={selectedUser.education || '本科'} onChange={e=>setSelectedUser({...selectedUser, education: e.target.value})} className="w-full bg-slate-950 border border-slate-700 p-2 rounded text-white outline-none"><option value="大专">大专</option><option value="本科">本科</option><option value="硕士">硕士</option></select></div>
+                                                <div className="col-span-2"><label className="block text-[10px] text-slate-500 mb-1">毕业院校</label><input type="text" value={selectedUser.school || ''} onChange={e=>setSelectedUser({...selectedUser, school: e.target.value})} className="w-full bg-slate-950 border border-slate-700 p-2 rounded text-white outline-none focus:border-blue-500" /></div>
+                                            </div>
+                                        ) : (
+                                            <div className="grid grid-cols-3 gap-y-5 gap-x-4 text-sm">
+                                                {(() => {
+                                                    const dynamicDetails = calculateEmploymentDetails(selectedUser.entryDate, selectedUser.type);
+                                                    return (
+                                                        <>
+                                                            <div><div className="text-slate-500 text-[10px] mb-1.5 uppercase font-medium">用工阶段状态</div><div>{getStatusBadge(dynamicDetails.status)}</div></div>
+                                                            <div><div className="text-slate-500 text-[10px] mb-1.5 uppercase font-medium">入职日期 & 司龄</div><div className="text-slate-200 font-medium">{selectedUser.entryDate || '未知'} <span className="text-xs text-blue-400 font-normal ml-1 bg-blue-950/30 px-1 rounded">({dynamicDetails.duration})</span></div></div>
+                                                        </>
+                                                    );
+                                                })()}
+                                                <div><div className="text-slate-500 text-[10px] mb-1.5 uppercase font-medium">特殊盘点标签</div><div className="text-slate-300 font-medium">{selectedUser.talentTag || '无'}</div></div>
+                                                <div><div className="text-slate-500 text-[10px] mb-1.5 uppercase font-medium">最高学历</div><div className="text-slate-200 font-medium">{selectedUser.education || '未知'}</div></div>
+                                                <div className="col-span-2"><div className="text-slate-500 text-[10px] mb-1.5 uppercase font-medium">毕业院校</div><div className="text-slate-200 font-medium">{selectedUser.school || '未知'}</div></div>
+                                                <div><div className="text-slate-500 text-[10px] mb-1.5 uppercase font-medium">现阶段薪资</div><div className="text-emerald-400 font-mono font-bold bg-emerald-950/40 px-2 py-0.5 rounded w-max border border-emerald-500/20">{selectedUser.salary || '未知'}</div></div>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* 模块2 */}
+                                    <div className="bg-slate-900 rounded-xl border border-slate-700 shadow-inner overflow-hidden">
+                                        <div className="p-4 border-b border-slate-800 bg-slate-800/40 flex justify-between items-center">
+                                            <h3 className="text-[11px] font-bold text-blue-400 uppercase tracking-widest flex items-center gap-2"><Sparkles className="w-4 h-4"/> 2. AI 面试与背景画像溯源</h3>
+                                            <label className="flex items-center gap-1.5 bg-blue-900/30 hover:bg-blue-800/50 text-blue-300 border border-blue-700/50 px-3 py-1.5 rounded cursor-pointer transition-colors text-xs font-medium">
+                                                {isParsingFile ? <Loader2 className="w-3.5 h-3.5 animate-spin"/> : <UploadCloud className="w-3.5 h-3.5"/>}
+                                                {isParsingFile ? "解析中..." : "上传报告/简历"}
+                                                <input type="file" className="hidden" accept=".doc,.docx,.pdf,.txt,.html,.md" ref={fileInputRef} onChange={handleFileUpload} />
+                                            </label>
+                                        </div>
+                                        <div className="p-5">
+                                            {!selectedUser.aiProfile ? (
+                                                <div className="space-y-4">
+                                                    <p className="text-xs text-slate-400">您可以直接粘贴历史记录，或使用右上角上传该员工的《面试评估报告》，AI 将自动提取基础底盘模型。</p>
+                                                    <textarea value={aiInputText} onChange={(e) => setAiInputText(e.target.value)} placeholder="在此粘贴评估报告内容、文本，或直接上传文档..." className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-xs text-slate-300 outline-none focus:border-blue-500 h-28 resize-none"/>
+                                                    <button onClick={handleGenerateAIProfile} disabled={isAiGenerating || !aiInputText.trim()} className="flex items-center justify-center gap-2 bg-blue-600/20 text-blue-400 border border-blue-500/50 hover:bg-blue-600/40 px-4 py-2.5 rounded-lg w-full text-sm font-bold transition-all disabled:opacity-50">
+                                                        {isAiGenerating ? <Loader2 className="w-4 h-4 animate-spin"/> : <BrainCircuit className="w-4 h-4"/>} {isAiGenerating ? "大模型深度解析与特征构建中..." : "生成结构化人才画像"}
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <div className="space-y-5 animate-in fade-in duration-500">
+                                                    <div className="bg-blue-950/10 p-4 rounded-lg border border-blue-900/30">
+                                                        <p className="text-sm text-slate-300 italic mb-3">"{selectedUser.aiProfile.summary}"</p>
+                                                        <div className="flex flex-wrap gap-2">{selectedUser.aiProfile.tags?.map((tag, i) => (<span key={i} className="text-[10px] bg-blue-900/40 text-blue-300 border border-blue-500/30 px-2 py-1 rounded-full">{tag}</span>))}</div>
+                                                    </div>
+                                                    <div className="grid grid-cols-2 gap-4">
+                                                        <div className="bg-slate-950 p-3 rounded-lg border border-slate-800">
+                                                            <h4 className="text-[10px] font-bold text-slate-400 mb-3 uppercase flex items-center gap-1">🧊 冰山之上 (硬技能)</h4>
+                                                            <div className="space-y-3">{selectedUser.aiProfile.icebergAbove?.map((item, i) => (<div key={i} className="border-l-2 border-slate-700 pl-2"><div className="flex justify-between text-xs mb-1"><span className="font-medium text-slate-200">{item.skill}</span><span className={item.level.includes('及格') || item.level.includes('优秀') ? 'text-green-400' : 'text-red-400'}>{item.level}</span></div><div className="text-[10px] text-slate-500 leading-tight">{item.desc}</div></div>))}</div>
+                                                        </div>
+                                                        <div className="bg-slate-950 p-3 rounded-lg border border-slate-800">
+                                                            <h4 className="text-[10px] font-bold text-slate-400 mb-3 uppercase flex items-center gap-1">🌊 冰山之下 (软素质)</h4>
+                                                            <div className="space-y-3">{selectedUser.aiProfile.icebergBelow?.map((item, i) => (<div key={i} className="border-l-2 border-slate-700 pl-2"><div className="flex justify-between text-xs mb-1"><span className="font-medium text-slate-200">{item.trait}</span><span className="text-yellow-400">{item.score}</span></div><div className="text-[10px] text-slate-500 leading-tight">{item.desc}</div></div>))}</div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* 模块3 */}
+                                    <div className="bg-indigo-950/20 rounded-xl border border-indigo-500/30 p-5">
+                                        <h3 className="text-[11px] font-bold text-indigo-400 mb-4 uppercase tracking-widest">3. 绑定岗位考核量化包</h3>
+                                        <div className="relative">
+                                            <select value={selectedUser.assessmentTemplateId || ""} onChange={(e) => updateGlobalUser({ ...selectedUser, assessmentTemplateId: e.target.value })} className={`w-full bg-slate-900 border text-sm rounded-lg p-3 pr-10 appearance-none outline-none ${!selectedUser.assessmentTemplateId ? 'border-yellow-500/50 text-yellow-300' : 'border-slate-700 text-slate-200'}`}>
+                                                <option value="" disabled>⚠️ 尚未关联考核包，请下拉选择...</option>
+                                                {scoringTemplates.map(tpl => <option key={tpl.id} value={tpl.id}>{tpl.name}</option>)}
+                                            </select>
+                                            <ChevronDown className="w-4 h-4 text-slate-500 absolute right-4 top-3.5 pointer-events-none"/>
+                                        </div>
+                                    </div>
+
+                                    {/* 模块4 */}
+                                    <div className="bg-slate-900 rounded-xl border border-slate-700 shadow-inner overflow-hidden">
+                                        <div className="p-4 border-b border-slate-800 bg-slate-800/40"><h3 className="text-[11px] font-bold text-slate-300 uppercase tracking-widest">4. 事实细节录入与打分结算</h3></div>
+                                        <div className="p-5 space-y-5">
+                                            <div className="flex gap-4 border-b border-slate-800 pb-3">
+                                                <button onClick={() => setScoreMode('rule')} className={`text-[13px] font-bold pb-2 border-b-2 transition-colors ${scoreMode === 'rule' ? 'text-blue-400 border-blue-500' : 'text-slate-500 border-transparent hover:text-slate-300'}`}>基于考核包打分</button>
+                                                <button onClick={() => setScoreMode('manual')} className={`text-[13px] font-bold pb-2 border-b-2 transition-colors ${scoreMode === 'manual' ? 'text-blue-400 border-blue-500' : 'text-slate-500 border-transparent hover:text-slate-300'}`}>手动变更分数 (审计)</button>
+                                            </div>
+                                            {scoreMode === 'rule' ? (
+                                                <div>
+                                                    <div className="flex flex-wrap gap-2.5">
+                                                        {!selectedUser.assessmentTemplateId ? (
+                                                            <div className="text-xs text-yellow-500/70 p-3 bg-yellow-950/10 rounded border border-yellow-900/30 w-full text-center">需先在模块3绑定岗位规范，此处才会出现打分选项。</div>
+                                                        ) : (
+                                                            scoringTemplates.find(t => t.id === selectedUser.assessmentTemplateId)?.rules.map(rule => (
+                                                                <button key={rule.id} onClick={() => setSelectedRule(selectedRule?.id === rule.id ? null : rule)} className={`text-xs px-3 py-2 rounded border transition-all flex items-center gap-2 ${selectedRule?.id === rule.id ? (rule.penalty < 0 ? 'bg-red-900/60 border-red-500 text-red-100' : 'bg-green-900/60 border-green-500 text-green-100') : 'bg-slate-800 border-slate-700 text-slate-300 hover:border-slate-500'}`}>
+                                                                    <span>{rule.name}</span><span className="font-mono font-bold">{rule.penalty > 0 ? '+' : ''}{rule.penalty}</span>
+                                                                </button>
+                                                            ))
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="bg-blue-950/10 border border-blue-900/40 p-4 rounded-lg">
+                                                    <label className="text-xs text-blue-300 font-medium mb-2 block">强制输入分值变动 (扣分为负，加分为正)</label>
+                                                    <div className="flex items-center gap-3">
+                                                        <input type="number" value={manualScoreChange} onChange={(e) => setManualScoreChange(e.target.value)} placeholder="例: -5 或 +10" className="bg-slate-950 border border-blue-900/50 rounded p-2 text-white w-32 font-mono outline-none focus:border-blue-400" />
+                                                        <span className="text-xs text-slate-500">变动后将重算大盘分数</span>
+                                                    </div>
+                                                </div>
+                                            )}
+                                            <div>
+                                                <label className="text-xs text-slate-400 font-medium mb-2 block">事实细节备注 <span className="text-red-400">*</span></label>
+                                                <textarea value={observation} onChange={(e) => setObservation(e.target.value)} placeholder={scoreMode === 'rule' ? "请简述触发该条款的客观事实..." : "严禁无理由手动改分！必须详细填写调整原因与依据..."} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-sm text-slate-200 outline-none focus:border-blue-500 h-24 resize-none" />
+                                            </div>
+                                            <div className="flex justify-end"><button onClick={handleSubmitScore} className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded-lg text-sm font-bold shadow-md">确认录入台账</button></div>
+                                        </div>
+                                    </div>
+
+                                    {/* 模块5 */}
+                                    <div>
+                                        <h3 className="text-[11px] font-bold text-slate-500 mb-5 uppercase tracking-widest">5. 在岗台账历史</h3>
+                                        <div className="space-y-4 relative before:absolute before:inset-0 before:ml-[11px] before:h-full before:w-px before:bg-slate-700/50">
+                                            {selectedUser.behaviors && selectedUser.behaviors.length > 0 ? (
+                                                selectedUser.behaviors.map((beh, idx) => (
+                                                    <div key={idx} className="relative flex items-start gap-4">
+                                                        <div className={`mt-1.5 w-6 h-6 rounded-full border-[4px] border-[#0F172A] z-10 shrink-0 ${beh.penalty < 0 ? 'bg-red-500' : beh.penalty > 0 ? 'bg-green-500' : 'bg-slate-500'}`}></div>
+                                                        <div className="flex-1 bg-slate-900 p-3.5 rounded-xl border border-slate-700/60 shadow-sm">
+                                                            <div className="flex justify-between items-center mb-2"><span className="text-[10px] text-slate-400 font-mono bg-slate-950 px-1.5 py-0.5 rounded">{beh.date}</span>{beh.penalty !== 0 && <span className={`text-[11px] font-bold px-2 py-0.5 rounded ${beh.penalty < 0 ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400'}`}>{beh.penalty > 0 ? '+' : ''}{beh.penalty}分</span>}</div>
+                                                            <p className="text-xs text-slate-300 leading-relaxed">{beh.desc}</p>
+                                                        </div>
+                                                    </div>
+                                                ))
+                                            ) : (
+                                                <div className="pl-8 text-sm text-slate-600 italic">该员工暂无打分历史记录。</div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </>
+                    )}
+
+                    {/* 全局弹窗: 设置与离职 */}
+                    {showSettingsModal && (
+                        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[80] flex items-center justify-center p-4">
+                            <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl">
+                                <div className="p-5 border-b border-slate-800 flex justify-between items-center bg-slate-800/40">
+                                    <h2 className="text-lg font-bold text-white flex items-center gap-2"><Settings className="w-5 h-5"/> 系统设置与模版库</h2>
+                                    <button onClick={() => { setShowSettingsModal(false); setIsCreatingTpl(false); }} className="text-slate-400 hover:text-white"><X className="w-5 h-5"/></button>
+                                </div>
+                                <div className="p-6 overflow-y-auto flex-1 custom-scrollbar space-y-8">
+                                    <div className="bg-[#0B1120] border border-blue-900/50 rounded-xl p-5 shadow-inner">
+                                        <h3 className="text-sm font-bold text-blue-400 mb-4 flex items-center gap-2"><Key className="w-4 h-4"/> 硅基流动 (SiliconFlow) API 引擎配置</h3>
+                                        <div className="space-y-4">
+                                            <div><label className="block text-[11px] text-slate-500 mb-1.5 uppercase tracking-wider">API Key (sk-...)</label><input type="password" value={sfApiKey} onChange={e => {setSfApiKey(e.target.value); localStorage.setItem('sf_api_key', e.target.value)}} className="w-full bg-slate-900 border border-slate-700 p-2.5 rounded text-white outline-none focus:border-blue-500 text-sm" placeholder="请填入您的 SiliconFlow 密钥" /></div>
+                                            <div>
+                                                <label className="block text-[11px] text-slate-500 mb-1.5 uppercase tracking-wider">首选 AI 模型</label>
+                                                <select value={sfModel} onChange={e => {setSfModel(e.target.value); localStorage.setItem('sf_model', e.target.value)}} className="w-full bg-slate-900 border border-slate-700 p-2.5 rounded text-white outline-none focus:border-blue-500 text-sm">
+                                                    <option value="deepseek-ai/DeepSeek-V3">DeepSeek-V3 (推荐: 极客推理极强)</option>
+                                                    <option value="Qwen/Qwen2.5-72B-Instruct">Qwen2.5-72B (备选: 指令遵循强)</option>
+                                                </select>
+                                            </div>
+                                            <p className="text-[10px] text-slate-500 border-l-2 border-slate-700 pl-2">您的密钥仅加密存储在本地浏览器的 localStorage 中，退出后不会泄露，请放心使用。</p>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        {!isCreatingTpl ? (
+                                            <>
+                                                <div className="flex justify-between items-center mb-4"><h3 className="text-sm font-bold text-slate-300 flex items-center gap-2"><FileCog className="w-4 h-4"/> 岗位考核大类模版库</h3><button onClick={() => setIsCreatingTpl(true)} className="flex items-center gap-1 text-xs bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 px-3 py-1.5 rounded border border-blue-500/50"><Plus className="w-3 h-3"/> 新增考核大类</button></div>
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    {scoringTemplates.map(tpl => (
+                                                        <div key={tpl.id} className="bg-slate-950 border border-slate-800 rounded-lg p-4 group relative hover:border-blue-500/30 transition-all">
+                                                            <div className="font-bold text-slate-200 text-sm mb-1">{tpl.name}</div>
+                                                            <div className="text-xs text-slate-500">内含 <strong className="text-blue-400">{tpl.rules.length}</strong> 项打分细则</div>
+                                                            <button onClick={() => handleDeleteTemplate(tpl.id)} className="absolute top-3 right-3 text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="w-4 h-4"/></button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <div className="space-y-4 bg-slate-900 border border-blue-900/40 p-5 rounded-xl animate-in fade-in">
+                                                <div className="flex justify-between items-center border-b border-slate-800 pb-2"><h3 className="text-sm font-bold text-blue-400">创建新考核大类</h3><button onClick={() => setIsCreatingTpl(false)} className="text-xs text-slate-500">返回</button></div>
+                                                <div><label className="text-xs text-slate-400 mb-1 block">大类名称 *</label><input type="text" value={newTplName} onChange={(e) => setNewTplName(e.target.value)} placeholder="如：系统策划考核标准" className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-sm outline-none focus:border-blue-500" /></div>
+                                                <div className="space-y-3"><label className="text-xs text-slate-400 block">预设扣分/加分细则 (至少1条) *</label><div className="flex gap-2"><input type="text" value={draftRuleName} onChange={(e) => setDraftRuleName(e.target.value)} placeholder="规则描述 (如: 进度延期)" className="flex-1 bg-slate-950 border border-slate-700 rounded p-2 text-xs outline-none" /><input type="number" value={draftRulePenalty} onChange={(e) => setDraftRulePenalty(e.target.value)} placeholder="分值 (如: -10)" className="w-24 bg-slate-950 border border-slate-700 rounded p-2 text-xs outline-none" /><button onClick={handleAddDraftRule} className="bg-slate-800 hover:bg-slate-700 px-3 rounded text-xs border border-slate-700">添加</button></div>
+                                                    {newTplRules.length > 0 && <div className="mt-3 space-y-1">{newTplRules.map((r, i) => (<div key={i} className="flex justify-between items-center bg-slate-950 p-2 rounded text-xs border border-slate-800"><span className="text-slate-300">{r.name}</span><span className={`font-mono font-bold ${r.penalty < 0 ? 'text-red-400' : 'text-green-400'}`}>{r.penalty > 0 ? '+' : ''}{r.penalty}</span></div>))}</div>}
+                                                </div>
+                                                <button onClick={handleSaveNewTemplate} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 rounded-lg text-sm mt-2">保存大类</button>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {showResignModal && selectedUser && (
+                        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[70] flex items-center justify-center">
+                            <div className="bg-slate-900 border border-red-900/50 rounded-2xl w-[450px] p-6">
+                                <h2 className="text-xl font-bold text-red-400 mb-2 flex items-center gap-2"><UserMinus className="w-5 h-5"/> 办理离职</h2>
+                                <p className="text-sm text-slate-400 mb-5">当前办理 <strong>{selectedUser.name}</strong> 的流失登记。</p>
+                                <textarea value={resignReason} onChange={(e) => setResignReason(e.target.value)} placeholder="必填：记录流失的详细原因..." className="w-full bg-red-950/20 border border-red-900/40 rounded p-3 text-sm text-red-100 outline-none h-28 resize-none" />
+                                <div className="flex justify-end gap-3 mt-6">
+                                    <button onClick={() => setShowResignModal(false)} className="px-4 py-2 text-sm text-slate-400">取消</button>
+                                    <button onClick={handleConfirmResign} className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm rounded font-bold">确认归档</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        const root = createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
