@@ -4,13 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>贝塔科技 - 组织效能驾驶舱</title>
-    <!-- 引入 Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- 引入 SheetJS 用于纯前端解析 Excel 花名册 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-
-    <!-- 配置前端模块映射表 -->
     <script type="importmap">
     {
         "imports": {
@@ -21,15 +16,13 @@
         }
     }
     </script>
-    <!-- 引入 Babel 实时编译 JSX -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <style>
-        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #475569; }
         .dragging-card { opacity: 0.5; transform: scale(0.95); transition: all 0.2s; }
-        .drag-over-zone { outline: 2px dashed #3b82f6; outline-offset: 2px; border-radius: 8px; }
     </style>
 </head>
 <body class="bg-[#0B1120] text-slate-200 antialiased overflow-x-auto">
@@ -39,14 +32,16 @@
         import React, { useState, useEffect, useRef } from 'react';
         import { createRoot } from 'react-dom/client';
         import { 
-            Briefcase, Calendar, FileCog, Sparkles, Loader2, UploadCloud, 
-            ShieldAlert, AlertTriangle, X, Edit2, Save, UserMinus, SearchX, 
-            ChevronDown, BrainCircuit, Key, TrendingUp, Target, Plus, Trash2,
-            Activity, PieChart, LineChart, Settings, Users, UserPlus, DownloadCloud, FileSpreadsheet, RotateCcw, GraduationCap
+            Activity, AlertTriangle, BrainCircuit, Briefcase, Calendar, ChevronDown,
+            DownloadCloud, Edit2, FileCog, FileSpreadsheet, GraduationCap, Key,
+            LineChart, Loader2, PieChart, Plus, RotateCcw, Save, SearchX,
+            ShieldAlert, Sparkles, Target, Trash2, UploadCloud, UserCircle2, UserMinus,
+            UserPlus, Users, X
         } from 'lucide-react';
 
         const CURRENT_DATE = new Date('2026-06-18');
 
+        // ========== 底层时间与状态引擎 ==========
         const calculateEmploymentDetails = (entryDateStr, baseType) => {
             if (!entryDateStr || entryDateStr === '未知') return { status: baseType || '未知', duration: '未知' };
             const entryDate = new Date(entryDateStr);
@@ -60,8 +55,6 @@
             if (diffTime < 0) duration = '未入职';
 
             let status = baseType;
-
-            // 智能与手动双轨制判断
             if (baseType === '正式员工') {
                 if (diffTime < 0) status = '正式员工（待入职）';
                 else if (diffMonths <= 3) status = '试用一期';
@@ -73,10 +66,8 @@
             } else if (baseType === '正式员工（已转正）' || baseType === '正式') {
                 status = '正式';
             } else {
-                // 如果是用户强制选定的“试用一期”、“试用二期”、“待入职”、“外派”，则优先尊重手工指令
                 status = baseType;
             }
-            
             return { status, duration };
         };
 
@@ -92,90 +83,92 @@
         };
 
         const defaultScoringTemplates = [
-            {
-                id: "tpl_level_intern", name: "关卡策划实习生考核标准",
-                rules: [
-                    { id: "r1", name: "单次不达标", penalty: -5, type: "negative", tags: ["执行力不足"] },
-                    { id: "r2", name: "连续两周不达标", penalty: -10, type: "negative", tags: ["学习敏锐度低"] },
-                    { id: "r3", name: "连续两周以上不达标", penalty: -15, type: "negative", tags: ["建议汰换"] },
-                    { id: "r4", name: "严重不达标(<80%)", penalty: -10, type: "negative", tags: ["产出不合格"] },
-                    { id: "r6", name: "超额完成原创关卡", penalty: +5, type: "positive", tags: ["积极自驱"] }
-                ]
-            },
-            {
-                id: "tpl_lead_designer", name: "主策划通用考核标准",
-                rules: [
-                    { id: "ld1", name: "核心系统架构失误", penalty: -15, type: "negative", tags: ["设计缺陷"] },
-                    { id: "ld2", name: "版本进度严重延期", penalty: -10, type: "negative", tags: ["统筹不力"] }
-                ]
-            },
-            {
-                id: "tpl_programmer", name: "程序研发考核标准",
-                rules: [
-                    { id: "pg1", name: "引发线上严重Bug", penalty: -20, type: "negative", tags: ["严重事故"] },
-                    { id: "pg3", name: "解决底层性能瓶颈", penalty: +10, type: "positive", tags: ["技术攻坚"] }
-                ]
-            }
+            { id: "tpl_level_intern", name: "通用考核标准 (示例)", rules: [{ id: "r1", name: "单次不达标", penalty: -5, type: "negative", tags: ["执行力不足"] }] }
         ];
 
+        // ========== 组织大盘初始化 (新规范树状) ==========
         const initialTeamArchitecture = {
-            producer: { 
-                id: "p1", name: "任光谦", role: "制作人", type: "正式员工", entryDate: "2020-03-01",
-                score: 100, talentTag: "核心骨干", age: 34, school: "武汉大学", education: "本科", salary: "100000"
-            },
+            producer: { id: "p1", name: "任光谦", role: "制作人", type: "正式员工", entryDate: "2020-03-01", score: 100, talentTag: "核心骨干", age: 34, school: "武汉大学", education: "本科", salary: "100000" },
             departments: [
                 {
                     id: "dept_design", name: "策划部", isSpanning: true,
-                    lead: { id: "c1", name: "陈冠兰", role: "主策划", type: "正式员工", entryDate: "2021-06-15", score: 100, talentTag: "主子背", age: 30, school: "华中科技大学", education: "本科", salary: "35000" },
-                    branches: [
+                    lead: { id: "c1", name: "陈冠兰", role: "主策划", type: "正式员工", entryDate: "2021-06-15", score: 100, talentTag: "主子背", education: "本科", salary: "35000" },
+                    groups: [
                         { title: "系统策划", members: [
-                            { id: "c2", name: "朱琰", role: "系统策划", type: "正式员工", entryDate: "2023-05-10", score: 100, age: 26, school: "中南民族大学", education: "本科", salary: "18000" },
-                            { id: "c3", name: "杨帆", role: "系统策划", type: "正式员工", entryDate: "2024-11-01", score: 100, age: 28, school: "未知", education: "大专", salary: "16000", talentTag: "执行" },
-                            { id: "c4", name: "王琳轲", role: "系统策划(待入职)", type: "正式员工（待入职）", entryDate: "2026-07-01", score: 100, age: 24, school: "未知", education: "本科", salary: "15000" }
+                            { id: "c2", name: "朱琰", role: "系统策划", type: "正式员工", entryDate: "2023-05-10", score: 100, education: "本科", salary: "18000" },
+                            { id: "c4", name: "王琳轲", role: "系统策划", type: "正式员工（待入职）", entryDate: "2026-07-01", score: 100, talentTag: "", education: "本科", salary: "15000" }
                         ]},
-                        { title: "数值策划", members: [
-                            { id: "c8", name: "蔡玉林", role: "数值策划", type: "正式员工", entryDate: "2023-08-20", score: 100, age: 27, school: "哈尔滨工业大学", education: "硕士", salary: "28000", talentTag: "高潜" }
-                        ]},
-                        { title: "活动策划", members: [
-                            { id: "c6", name: "李青玉", role: "活动策划", type: "正式员工", entryDate: "2025-02-14", score: 100, age: 25, school: "北京林业大学", education: "本科", salary: "14000" },
-                            { id: "c7", name: "刘子康", role: "活动策划(待离职)", type: "正式员工", entryDate: "2024-05-10", score: 55, age: 26, school: "未知", education: "本科", salary: "15000", talentTag: "待离职" }
-                        ]},
-                        { title: "关卡策划", members: [
-                            { id: "c9", name: "王昶越", role: "关卡组长", type: "正式员工", entryDate: "2022-04-10", score: 100, age: 29, school: "武汉理工大学", education: "本科", salary: "25000", talentTag: "核心骨干" },
-                            { id: "c11", name: "吴彧斐", role: "关卡实习生", type: "实习生", entryDate: "2026-06-01", score: 75, age: 22, school: "湖北大学", education: "本科", salary: "4000" },
-                            { id: "c12", name: "张文欣", role: "关卡策划", type: "正式员工", entryDate: "2023-11-20", score: 100, age: 26, school: "未知", education: "本科", salary: "16000" }
-                        ]}
+                        { title: "数值策划", members: [ { id: "c8", name: "蔡玉林", role: "数值策划", type: "正式员工", entryDate: "2023-08-20", score: 100, talentTag: "高潜", education: "硕士", salary: "28000" } ]},
+                        { title: "活动策划", members: [ { id: "c6", name: "李青玉", role: "活动策划", type: "正式员工", entryDate: "2025-02-14", score: 100, education: "本科", salary: "14000" } ]},
+                        { title: "关卡策划", members: [ { id: "c9", name: "王昶越", role: "关卡组长", type: "正式员工", entryDate: "2022-04-10", score: 100, talentTag: "核心骨干", education: "本科", salary: "25000" } ]}
                     ]
                 },
                 {
-                    id: "dept_tech", name: "程序部", isSpanning: false,
-                    lead: { id: "t1", name: "戴佳文", role: "客户端主程", type: "正式员工", entryDate: "2022-01-05", score: 100, age: 32, school: "电子科技大学", education: "本科", salary: "40000", talentTag: "主子背" },
-                    roles: [
-                        { title: "客户端开发", members: [
-                            { id: "t2", name: "刘澎", role: "客户端开发", type: "正式员工", entryDate: "2024-03-10", score: 65, age: 31, school: "中北大学", education: "本科", salary: "29000" },
-                            { id: "t3", name: "白冰", role: "客户端开发", type: "正式员工", entryDate: "2025-10-15", score: 100, age: 29, school: "景德镇陶瓷大学", education: "本科", salary: "25000", talentTag: "执行" }
-                        ]}
+                    id: "dept_tech", name: "程序部", isSpanning: true,
+                    lead: { id: "t1", name: "戴佳文", role: "客户端主程", type: "正式员工", entryDate: "2022-01-05", score: 100, talentTag: "主子背", education: "本科", salary: "40000" },
+                    groups: [
+                        { title: "前端开发", members: [ { id: "t2", name: "刘澎", role: "客户端开发", type: "正式员工", entryDate: "2024-03-10", score: 65, education: "本科", salary: "29000" } ]},
+                        { title: "后端开发", members: [ { id: "t3", name: "白冰", role: "服务端开发", type: "正式员工", entryDate: "2025-10-15", score: 100, talentTag: "执行", education: "本科", salary: "25000" } ]}
+                    ]
+                },
+                {
+                    id: "dept_art", name: "美术部", isSpanning: true,
+                    lead: null, // 虚位以待
+                    groups: [
+                        { title: "原画", members: [ { id: "a4", name: "张蕴秀", role: "原画师", type: "正式员工", entryDate: "2023-02-15", score: 100, education: "本科", salary: "18000" } ]},
+                        { title: "UI", members: [] },
+                        { title: "3D模型", members: [] },
+                        { title: "动效", members: [ { id: "a2", name: "孙伟轩", role: "动效设计师", type: "正式员工", entryDate: "2022-11-10", score: 100, education: "本科", salary: "22000" } ]}
+                    ]
+                },
+                {
+                    id: "dept_market", name: "市场运营部", isSpanning: true,
+                    lead: null,
+                    groups: [
+                        { title: "市场负责人", members: [] },
+                        { title: "优化师", members: [ { id: "m4", name: "张卓良", role: "投放优化师", type: "正式员工", entryDate: "2024-09-01", score: 100, education: "本科", salary: "23000" } ]},
+                        { title: "平面设计", members: [] },
+                        { title: "视频设计", members: [ { id: "m1", name: "任博伟", role: "视频设计师", type: "正式员工", entryDate: "2023-06-20", score: 100, education: "本科", salary: "21000" } ]},
+                        { title: "运营负责人", members: [] },
+                        { title: "运营", members: [ { id: "m6", name: "邢昊阳", role: "游戏运营", type: "正式员工", entryDate: "2023-03-15", score: 100, education: "本科", salary: "18000" } ]}
                     ]
                 },
                 {
                     id: "dept_qa", name: "测试部", isSpanning: false,
-                    lead: { id: "q1", name: "刘禹杭", role: "测试组长", type: "正式员工", entryDate: "2023-07-01", score: 100, age: 28, school: "未知", education: "本科", salary: "20000" },
-                    roles: [
-                        { title: "测试执行", members: [
-                            { id: "q2", name: "牟书含", role: "测试工程师", type: "正式员工", entryDate: "2024-08-10", score: 100, age: 26, school: "未知", education: "本科", salary: "15000" },
-                            { id: "q4", name: "张鑫晨", role: "测试实习生", type: "实习生（待入职）", entryDate: "2026-05-01", score: 100, age: 22, school: "南京邮电大学", education: "硕士", salary: "3000" }
-                        ]}
+                    lead: { id: "q1", name: "刘禹杭", role: "测试组长", type: "正式员工", entryDate: "2023-07-01", score: 100, education: "本科", salary: "20000" },
+                    groups: [
+                        { title: "测试执行", members: [ { id: "q2", name: "牟书含", role: "测试工程师", type: "正式员工", entryDate: "2024-08-10", score: 100, education: "本科", salary: "15000" } ]}
                     ]
                 }
             ]
         };
 
+        const parseAIResponse = (text) => {
+            try {
+                let cleanText = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+                const firstBrace = cleanText.indexOf('{');
+                const lastBrace = cleanText.lastIndexOf('}');
+                if (firstBrace !== -1 && lastBrace !== -1) cleanText = cleanText.substring(firstBrace, lastBrace + 1);
+                return JSON.parse(cleanText);
+            } catch (e) { throw new Error("AI解析返回格式异常"); }
+        };
+
         function App() {
             const [activeTab, setActiveTab] = useState('kanban'); 
             
+            // 数据迁移与初始化
             const [data, setData] = useState(() => {
                 const saved = localStorage.getItem('beta_team_data');
-                return saved ? JSON.parse(saved) : initialTeamArchitecture;
+                if (saved) {
+                    let parsed = JSON.parse(saved);
+                    parsed.departments = parsed.departments.map(d => {
+                        if (d.branches) { d.groups = d.branches; delete d.branches; }
+                        if (d.roles) { d.groups = d.roles; delete d.roles; }
+                        return d;
+                    });
+                    return parsed;
+                }
+                return initialTeamArchitecture;
             });
             const [resignedStaff, setResignedStaff] = useState(() => {
                 const saved = localStorage.getItem('beta_resigned_staff');
@@ -193,6 +186,7 @@
             const [sfApiKey, setSfApiKey] = useState(localStorage.getItem('sf_api_key') || "");
             const [sfModel, setSfModel] = useState(localStorage.getItem('sf_model') || "deepseek-ai/DeepSeek-V3");
 
+            // UI控制状态
             const [selectedUser, setSelectedUser] = useState(null);
             const [isDrawerOpen, setIsDrawerOpen] = useState(false);
             const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -200,72 +194,44 @@
             const [showResignModal, setShowResignModal] = useState(false);
             const [resignReason, setResignReason] = useState("");
 
+            // 新增操作状态
             const [showAddEmpModal, setShowAddEmpModal] = useState(false);
-            const [addEmpTarget, setAddEmpTarget] = useState(null); 
+            const [showAddHcModal, setShowAddHcModal] = useState(false);
+            const [addTarget, setAddTarget] = useState(null); 
+            const [hcData, setHcData] = useState({ name: "", level: "P1" });
+
             const addEmpFileRef = useRef(null);
             const syncExcelRef = useRef(null);
             const importResignRef = useRef(null);
+            const dragRef = useRef(null);
 
-            const [observation, setObservation] = useState("");
-            const [selectedRule, setSelectedRule] = useState(null);
-            const [scoreMode, setScoreMode] = useState('rule'); 
-            const [manualScoreChange, setManualScoreChange] = useState(""); 
-
+            // AI相关状态
             const [aiInputText, setAiInputText] = useState("");
             const [isAiGenerating, setIsAiGenerating] = useState(false);
             const [isParsingFile, setIsParsingFile] = useState(false);
             const [isSyncingExcel, setIsSyncingExcel] = useState(false);
             const [isImportingResigned, setIsImportingResigned] = useState(false);
             
-            const [strategyInput, setStrategyInput] = useState("");
-            const [strategyReport, setStrategyReport] = useState(null);
-            const [isStrategyLoading, setIsStrategyLoading] = useState(false);
-
-            const [isCreatingTpl, setIsCreatingTpl] = useState(false);
-            const [newTplName, setNewTplName] = useState("");
-            const [newTplRules, setNewTplRules] = useState([]);
-            const [draftRuleName, setDraftRuleName] = useState("");
-            const [draftRulePenalty, setDraftRulePenalty] = useState("");
-
-            const dragRef = useRef(null);
+            // 打分面板状态
+            const [scoreMode, setScoreMode] = useState('rule'); 
+            const [selectedRule, setSelectedRule] = useState(null);
+            const [observation, setObservation] = useState("");
+            const [manualScoreChange, setManualScoreChange] = useState(""); 
 
             const getTeamMetrics = () => {
-                let totalMonthlyCost = 0; let riskCount = 0; let headcount = 0;
-                let validScoreCount = 0; let totalScore = 0;
-                const processUser = (user) => {
-                    if (user.isVacant || (user.type && user.type.includes('待入职'))) return;
-                    headcount++;
-                    if (user.score !== undefined) {
-                        totalScore += Number(user.score); validScoreCount++;
-                        if (Number(user.score) < 80) riskCount++;
-                    }
-                    if (user.salary && user.salary !== "未知") {
-                        const num = parseInt(user.salary.toString().replace(/,/g, ''), 10);
-                        if (!isNaN(num) && num > 1000) totalMonthlyCost += num; 
+                let headcount = 0, riskCount = 0;
+                const processUser = (u) => {
+                    if (u && !u.isVacant && !(u.type && u.type.includes('待入职'))) {
+                        headcount++;
+                        if (Number(u.score) < 80) riskCount++;
                     }
                 };
                 processUser(data.producer);
                 data.departments.forEach(dept => {
                     if(dept.lead) processUser(dept.lead);
-                    if(dept.roles) dept.roles.forEach(r => r.members.forEach(processUser));
-                    if(dept.branches) dept.branches.forEach(b => b.members.forEach(processUser));
+                    dept.groups?.forEach(g => g.members.forEach(processUser));
                 });
-                return { headcount, avgScore: validScoreCount ? (totalScore/validScoreCount).toFixed(1) : 0, totalMonthlyCost: totalMonthlyCost.toLocaleString(), riskCount };
-            };
-
-            const parseAIResponse = (text) => {
-                try {
-                    let cleanText = text.replace(/```json/gi, '').replace(/```/g, '').trim();
-                    const firstBrace = cleanText.indexOf('{');
-                    const lastBrace = cleanText.lastIndexOf('}');
-                    if (firstBrace !== -1 && lastBrace !== -1) {
-                        cleanText = cleanText.substring(firstBrace, lastBrace + 1);
-                    }
-                    return JSON.parse(cleanText);
-                } catch (e) {
-                    console.error("JSON解析失败:", text);
-                    throw new Error("解析AI返回数据失败，请重试或更换模型。");
-                }
+                return { headcount, riskCount };
             };
 
             const fetchSiliconFlowAPI = async (systemPrompt, userPrompt) => {
@@ -287,103 +253,401 @@
                 } else {
                     newData.departments = newData.departments.map(dept => {
                         if (dept.lead && dept.lead.id === updatedUser.id) return { ...dept, lead: updatedUser };
-                        if (dept.isSpanning) {
-                            return { ...dept, branches: dept.branches.map(b => ({ ...b, members: b.members.map(m => m.id === updatedUser.id ? updatedUser : m) })) };
-                        } else {
-                            return { ...dept, roles: dept.roles.map(r => ({ ...r, members: r.members.map(m => m.id === updatedUser.id ? updatedUser : m) })) };
-                        }
+                        return { ...dept, groups: dept.groups.map(g => ({ ...g, members: g.members.map(m => m.id === updatedUser.id ? updatedUser : m) })) };
                     });
                 }
                 setData(newData);
+            };
+
+            // ========== AI智能花名册匹配与容错核心引擎 ==========
+            const getMatchedLocation = (roleStr) => {
+                const role = roleStr.toLowerCase();
+                if (role.includes('主策')) return { dept: '策划部', isLead: true };
+                if (role.includes('系统')) return { dept: '策划部', group: '系统策划' };
+                if (role.includes('数值')) return { dept: '策划部', group: '数值策划' };
+                if (role.includes('活动')) return { dept: '策划部', group: '活动策划' };
+                if (role.includes('关卡')) return { dept: '策划部', group: '关卡策划' };
+                if (role.includes('策')) return { dept: '策划部', group: '系统策划' };
+                
+                if (role.includes('主程')) return { dept: '程序部', isLead: true };
+                if (role.includes('前') || role.includes('unity') || role.includes('cocos') || role.includes('client')) return { dept: '程序部', group: '前端开发' };
+                if (role.includes('后') || role.includes('server') || role.includes('java') || role.includes('c++')) return { dept: '程序部', group: '后端开发' };
+                if (role.includes('程') || role.includes('开发')) return { dept: '程序部', group: '前端开发' };
+                
+                if (role.includes('主美')) return { dept: '美术部', isLead: true };
+                if (role.includes('原画')) return { dept: '美术部', group: '原画' };
+                if (role.includes('ui')) return { dept: '美术部', group: 'UI' };
+                if (role.includes('3d') || role.includes('模型')) return { dept: '美术部', group: '3D模型' };
+                if (role.includes('动效') || role.includes('特效')) return { dept: '美术部', group: '动效' };
+                if (role.includes('美')) return { dept: '美术部', group: '原画' };
+                
+                if (role.includes('优化') || role.includes('投放')) return { dept: '市场运营部', group: '优化师' };
+                if (role.includes('平面')) return { dept: '市场运营部', group: '平面设计' };
+                if (role.includes('视频')) return { dept: '市场运营部', group: '视频设计' };
+                if (role.includes('市场')) return { dept: '市场运营部', group: '市场负责人' };
+                if (role.includes('运营')) return { dept: '市场运营部', group: '运营' };
+                
+                if (role.includes('测') || role.includes('qa')) return { dept: '测试部', group: '测试执行' };
+                
+                // Fallback: 如果名字极其奇葩，强制归入市场运营部并使用它的原名建组，防丢失
+                return { dept: '市场运营部', group: roleStr }; 
             };
 
             const handleSyncRoster = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
                 setIsSyncingExcel(true);
-                
                 const reader = new FileReader();
                 reader.onload = (event) => {
                     try {
-                        const buffer = new Uint8Array(event.target.result);
-                        const workbook = window.XLSX.read(buffer, {type: 'array'});
-                        const firstSheetName = workbook.SheetNames[0];
-                        const worksheet = workbook.Sheets[firstSheetName];
-                        const jsonRaw = window.XLSX.utils.sheet_to_json(worksheet, {raw: false});
+                        const workbook = window.XLSX.read(new Uint8Array(event.target.result), {type: 'array'});
+                        const jsonRaw = window.XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], {raw: false});
                         
                         let newData = JSON.parse(JSON.stringify(data)); 
                         let updatedCount = 0; let newCount = 0;
 
                         jsonRaw.forEach(row => {
                             const nameKey = Object.keys(row).find(k => k.includes('姓名') || k.includes('名字'));
+                            if (!nameKey || !row[nameKey]) return; 
+                            const empName = row[nameKey].toString().trim();
+
                             const roleKey = Object.keys(row).find(k => k.includes('岗位') || k.includes('职位'));
                             const dateKey = Object.keys(row).find(k => k.includes('入职'));
                             const typeKey = Object.keys(row).find(k => k.includes('状态') || k.includes('用工'));
                             const salaryKey = Object.keys(row).find(k => k.includes('薪') || k.includes('工资'));
                             const eduKey = Object.keys(row).find(k => k.includes('学历'));
                             const schoolKey = Object.keys(row).find(k => k.includes('学校') || k.includes('院校'));
-                            
-                            if (!nameKey || !row[nameKey]) return; 
-                            const empName = row[nameKey].toString().trim();
-                            let found = false;
 
-                            const updateEmp = (emp) => {
-                                if (emp.name === empName) {
-                                    found = true;
-                                    if (roleKey && row[roleKey]) emp.role = row[roleKey].toString().trim();
-                                    if (dateKey && row[dateKey]) emp.entryDate = row[dateKey].toString().replace(/\//g, '-');
-                                    if (typeKey && row[typeKey]) emp.type = row[typeKey].toString().trim();
-                                    if (salaryKey && row[salaryKey]) emp.salary = row[salaryKey].toString().trim();
-                                    if (eduKey && row[eduKey]) emp.education = row[eduKey].toString().trim();
-                                    if (schoolKey && row[schoolKey]) emp.school = row[schoolKey].toString().trim();
-                                    updatedCount++;
-                                }
+                            let found = false;
+                            const applyUpdates = (emp) => {
+                                found = true;
+                                if (roleKey && row[roleKey]) emp.role = row[roleKey].toString().trim();
+                                if (dateKey && row[dateKey]) emp.entryDate = row[dateKey].toString().replace(/\//g, '-');
+                                if (typeKey && row[typeKey]) emp.type = row[typeKey].toString().trim();
+                                if (salaryKey && row[salaryKey]) emp.salary = row[salaryKey].toString().trim();
+                                if (eduKey && row[eduKey]) emp.education = row[eduKey].toString().trim();
+                                if (schoolKey && row[schoolKey]) emp.school = row[schoolKey].toString().trim();
+                                updatedCount++;
                             };
 
-                            if (newData.producer.name === empName) updateEmp(newData.producer);
+                            if (newData.producer && newData.producer.name === empName) applyUpdates(newData.producer);
                             newData.departments.forEach(dept => {
-                                if (dept.lead && dept.lead.name === empName) updateEmp(dept.lead);
-                                if (dept.isSpanning) dept.branches.forEach(b => b.members.forEach(updateEmp));
-                                else dept.roles.forEach(r => r.members.forEach(updateEmp));
+                                if (dept.lead && dept.lead.name === empName) applyUpdates(dept.lead);
+                                dept.groups?.forEach(g => g.members.forEach(m => { if(m.name === empName) applyUpdates(m); }));
                             });
 
                             if (!found) {
                                 newCount++;
-                                const assignedRole = roleKey ? row[roleKey].toString().trim() : '未知岗位';
+                                const rawRole = roleKey && row[roleKey] ? row[roleKey].toString().trim() : '未知职位';
                                 const newEmp = {
                                     id: 'emp_' + Math.random().toString(36).substr(2, 9),
-                                    name: empName,
-                                    role: assignedRole,
+                                    name: empName, role: rawRole,
                                     type: typeKey ? row[typeKey].toString().trim() : '正式员工',
                                     entryDate: dateKey && row[dateKey] ? row[dateKey].toString().replace(/\//g, '-') : CURRENT_DATE.toISOString().split('T')[0],
                                     salary: salaryKey ? row[salaryKey].toString().trim() : '未知',
                                     education: eduKey ? row[eduKey].toString().trim() : '未知',
                                     school: schoolKey ? row[schoolKey].toString().trim() : '未知',
-                                    score: 100,
-                                    talentTag: ''
+                                    score: 100, talentTag: '', behaviors: []
                                 };
-                                let isAssigned = false;
-                                newData.departments.forEach(dept => {
-                                    if (!isAssigned && (dept.name.includes(assignedRole.substring(0,2)) || assignedRole.includes(dept.name.substring(0,2)))) {
-                                        if (dept.isSpanning && dept.branches.length > 0) { dept.branches[0].members.push(newEmp); isAssigned = true; }
-                                        else if (!dept.isSpanning && dept.roles.length > 0) { dept.roles[0].members.push(newEmp); isAssigned = true; }
+
+                                const targetLoc = getMatchedLocation(rawRole);
+                                const targetDept = newData.departments.find(d => d.name === targetLoc.dept) || newData.departments[0];
+                                
+                                if (targetLoc.isLead) {
+                                    targetDept.lead = newEmp;
+                                } else {
+                                    let targetGroup = targetDept.groups.find(g => g.title === targetLoc.group);
+                                    if (!targetGroup) {
+                                        targetGroup = { title: targetLoc.group, members: [] };
+                                        targetDept.groups.push(targetGroup);
                                     }
-                                });
-                                if (!isAssigned) {
-                                    if (newData.departments[0].branches.length > 0) newData.departments[0].branches[newData.departments[0].branches.length-1].members.push(newEmp);
+                                    targetGroup.members.push(newEmp);
                                 }
                             }
                         });
                         setData(newData);
-                        alert(`✅ 花名册解析与重构成功！\n- 自动更新了 ${updatedCount} 名老员工信息。\n- 新增了 ${newCount} 名新成员。`);
-                    } catch (err) {
-                        alert("解析失败，请确保上传合法 .xlsx 格式。\n报错详情: " + err.message);
-                    } finally {
-                        setIsSyncingExcel(false);
-                        if(syncExcelRef.current) syncExcelRef.current.value = "";
-                    }
+                        alert(`✅ 花名册极速解析落位成功！\n- 覆盖更新: ${updatedCount} 人\n- 自动识别新建: ${newCount} 人`);
+                    } catch (err) { alert("解析失败，请确保格式正确。\n报错: " + err.message); } 
+                    finally { setIsSyncingExcel(false); if(syncExcelRef.current) syncExcelRef.current.value = ""; }
                 };
                 reader.readAsArrayBuffer(file);
+            };
+
+            // ========== 子集与 HC 管理 ==========
+            const addGroup = (deptId) => {
+                const name = prompt("请输入要新增的业务线或子集架构名称：");
+                if (name && name.trim()) {
+                    let newData = { ...data };
+                    const dept = newData.departments.find(d => d.id === deptId);
+                    if (dept) dept.groups.push({ title: name.trim(), members: [] });
+                    setData(newData);
+                }
+            };
+
+            const removeGroup = (deptId, groupTitle) => {
+                let newData = { ...data };
+                const dept = newData.departments.find(d => d.id === deptId);
+                const gIndex = dept.groups.findIndex(g => g.title === groupTitle);
+                if (dept.groups[gIndex].members.length > 0) {
+                    if(!window.confirm(`警告：[${groupTitle}] 下还有 ${dept.groups[gIndex].members.length} 名成员！删除该组将同时抹除这些成员数据，确认强制删除吗？`)) return;
+                }
+                dept.groups.splice(gIndex, 1);
+                setData(newData);
+            };
+
+            const handleAddHcSubmit = () => {
+                if(!hcData.name) return;
+                const newHc = {
+                    id: "hc_" + Date.now(),
+                    name: `${hcData.name} ${hcData.level} (待招)`,
+                    role: hcData.name,
+                    isVacant: true,
+                    type: "待入职",
+                    talentTag: "待招HC",
+                    score: 100,
+                    behaviors: []
+                };
+
+                let newData = { ...data };
+                if (addTarget.isLead) {
+                    newData.departments.find(d => d.id === addTarget.deptId).lead = newHc;
+                } else {
+                    const dept = newData.departments.find(d => d.id === addTarget.deptId);
+                    dept.groups.find(g => g.title === addTarget.groupTitle).members.push(newHc);
+                }
+                setData(newData);
+                setShowAddHcModal(false); setHcData({ name: "", level: "P1" });
+            };
+
+            const removeHc = (userId) => {
+                let newData = { ...data };
+                newData.departments.forEach(dept => {
+                    if (dept.lead?.id === userId) dept.lead = null;
+                    dept.groups.forEach(g => { g.members = g.members.filter(m => m.id !== userId); });
+                });
+                setData(newData);
+            };
+
+            // ========== 原生拖拽引擎 ==========
+            const handleDragStart = (e, deptId, groupTitle, user) => {
+                dragRef.current = { deptId, groupTitle, user };
+                e.dataTransfer.effectAllowed = "move";
+                e.target.classList.add('dragging-card');
+            };
+            const handleDragEnd = (e) => { e.target.classList.remove('dragging-card'); };
+            const handleDragOver = (e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; };
+            const handleDrop = (e, targetDeptId, targetGroupTitle, targetIndex) => {
+                e.preventDefault(); e.stopPropagation();
+                const source = dragRef.current;
+                if (!source) return;
+
+                let newData = { ...data };
+                let draggedUser = { ...source.user }; 
+
+                newData.departments.forEach(dept => {
+                    if (dept.id === source.deptId) {
+                        if (source.groupTitle === 'lead') dept.lead = null;
+                        else dept.groups.find(g => g.title === source.groupTitle).members = dept.groups.find(g => g.title === source.groupTitle).members.filter(m => m.id !== draggedUser.id);
+                    }
+                });
+
+                draggedUser.role = targetGroupTitle === 'lead' ? '部门负责人' : targetGroupTitle; 
+                
+                newData.departments.forEach(dept => {
+                    if (dept.id === targetDeptId) {
+                        if (targetGroupTitle === 'lead') dept.lead = draggedUser;
+                        else {
+                            let g = dept.groups.find(x => x.title === targetGroupTitle);
+                            if (targetIndex === -1) g.members.push(draggedUser);
+                            else g.members.splice(targetIndex, 0, draggedUser);
+                        }
+                    }
+                });
+                setData(newData); dragRef.current = null;
+            };
+
+            // ========== AI入职、解析与打分引擎 ==========
+            const handleAiAddEmployee = async (e) => {
+                const file = e.target.files[0];
+                if (!file || !sfApiKey) return;
+                setIsParsingFile(true);
+                const reader = new FileReader();
+                reader.onload = async (event) => {
+                    let content = event.target.result;
+                    if (content.includes('<html')) {
+                        const doc = new DOMParser().parseFromString(content, 'text/html');
+                        content = doc.body.textContent.replace(/\s+/g, ' ').trim();
+                    }
+                    const sysPrompt = `智能HR。从下方提取简历结构：{"name":"张三", "school":"复旦大学", "education":"本科", "salary":"未知"}`;
+                    try {
+                        const aiText = await fetchSiliconFlowAPI(sysPrompt, content.substring(0, 3000));
+                        const info = parseAIResponse(aiText);
+                        const newUser = {
+                            id: "emp_" + Date.now(), name: info.name || "新员工", role: addTarget.groupTitle,
+                            type: "正式员工（待入职）", entryDate: CURRENT_DATE.toISOString().split('T')[0], score: 100,
+                            school: info.school || "未知", education: info.education || "本科", salary: info.salary || "未知", talentTag: "", behaviors: []
+                        };
+                        let newData = { ...data };
+                        if(addTarget.isLead) newData.departments.find(d=>d.id===addTarget.deptId).lead = newUser;
+                        else newData.departments.find(d=>d.id===addTarget.deptId).groups.find(g=>g.title===addTarget.groupTitle).members.push(newUser);
+                        setData(newData); setShowAddEmpModal(false);
+                    } catch (err) { alert("识别失败: " + err.message); } 
+                    finally { setIsParsingFile(false); if(addEmpFileRef.current) addEmpFileRef.current.value = ""; }
+                };
+                reader.readAsText(file);
+            };
+
+            const handleFileForDrawer = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                setIsParsingFile(true);
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    let content = event.target.result;
+                    if (content.includes('<html')) {
+                        const doc = new DOMParser().parseFromString(content, 'text/html');
+                        content = doc.body.textContent.replace(/\s+/g, ' ').trim();
+                    }
+                    if (/\x00/.test(content)) content = `[文件二进制流提取成功: ${file.name} - 请直接点击提取按钮]`;
+                    setAiInputText(content);
+                    setIsParsingFile(false);
+                };
+                reader.readAsText(file);
+            };
+
+            const handleGenerateAIProfile = async () => {
+                if (!aiInputText.trim()) return;
+                setIsAiGenerating(true);
+                const sysPrompt = `你是一位专业的游戏行业HRBP。请根据用户提供的资料，提取结构化的【基础人才画像】。直接输出合法的JSON，不要Markdown代码块。格式：\n{"summary": "50字以内评价", "tags": ["标签1", "标签2"], "icebergAbove": [{"skill": "硬技能", "level": "及格/较差/优秀", "desc": "佐证"}], "icebergBelow": [{"trait": "软素质", "score": "分值/表现", "desc": "佐证"}]}`;
+                try {
+                    const content = await fetchSiliconFlowAPI(sysPrompt, aiInputText);
+                    const profileData = parseAIResponse(content);
+                    updateGlobalUser({ ...selectedUser, aiProfile: profileData });
+                    setAiInputText("");
+                } catch (err) {
+                    if (err.message === "API_KEY_MISSING") alert("请先前往右上角系统配置填写 硅基流动 API Key！");
+                    else alert("解析失败: " + err.message);
+                } finally {
+                    setIsAiGenerating(false);
+                }
+            };
+
+            const handleSubmitScore = () => {
+                let penalty = scoreMode === 'rule' ? (selectedRule?.penalty || 0) : Number(manualScoreChange);
+                if (isNaN(penalty) || penalty === 0 || !observation.trim()) return alert("请完整填写事实备注！");
+
+                const newBehavior = { 
+                    date: CURRENT_DATE.toISOString().split('T')[0], 
+                    desc: `【${scoreMode==='rule'?selectedRule.name:'手动调整'}】 ${observation}`, 
+                    penalty: penalty, 
+                    type: penalty < 0 ? 'negative' : 'positive' 
+                };
+                
+                const newScore = Math.min(100, Math.max(0, (Number(selectedUser.score) || 100) + penalty));
+                updateGlobalUser({
+                    ...selectedUser,
+                    score: newScore,
+                    behaviors: [newBehavior, ...(selectedUser.behaviors || [])],
+                    dynamicTags: Array.from(new Set([...(selectedUser.dynamicTags || []), ...(selectedRule?.tags || [])]))
+                });
+                
+                setObservation(""); setSelectedRule(null); setManualScoreChange("");
+            };
+
+            const handleConfirmResign = () => {
+                if(!resignReason) return alert("请填写原因");
+                setResignedStaff([...resignedStaff, {...selectedUser, resignDate: CURRENT_DATE.toISOString().split('T')[0], resignReason}]);
+                
+                const newData = { ...data };
+                newData.departments = newData.departments.map(dept => {
+                    if (dept.lead?.id === selectedUser.id) return { ...dept, lead: null };
+                    return { ...dept, groups: dept.groups.map(g => ({ ...g, members: g.members.filter(m => m.id !== selectedUser.id) })) };
+                });
+                setData(newData);
+                setIsDrawerOpen(false); setShowResignModal(false); setResignReason("");
+            };
+
+            const handleGenerateStrategy = async () => {
+                if (!strategyInput.trim()) return;
+                setIsStrategyLoading(true);
+                let highRiskStaff = [];
+                const checkUser = (u) => { if(u && !u.isVacant && Number(u.score)<80) highRiskStaff.push(`${u.name}(${u.role}, ${u.score}分)`) };
+                checkUser(data.producer);
+                data.departments.forEach(d => {
+                    checkUser(d.lead);
+                    d.groups?.forEach(g => g.members.forEach(checkUser));
+                });
+                const sysPrompt = `你是一位顶尖的OD专家。根据现状及目标，输出JSON格式推演报告，不要Markdown：\n{"feasibility": "高/中/低", "riskAnalysis": "痛点与爆雷风险分析(100字)", "actions": [{"type": "内部调整", "desc": "行动建议"}, {"type": "外部招聘", "desc": "建议"}]}`;
+                const userPrompt = `【目标】：${strategyInput}\n【高危卡点人员】：${highRiskStaff.join('; ') || '无'}\n请帮我出具干预策略。`;
+                try {
+                    const content = await fetchSiliconFlowAPI(sysPrompt, userPrompt);
+                    setStrategyReport(parseAIResponse(content));
+                } catch (err) {
+                    if (err.message === "API_KEY_MISSING") alert("请先前往右上角系统配置填写 硅基流动 API Key！");
+                    else alert("推演失败: " + err.message);
+                } finally {
+                    setIsStrategyLoading(false);
+                }
+            };
+
+            // ========== 大盘卡片组件 ==========
+            const EmployeeCard = ({ user, deptId, groupTitle, mIdx }) => {
+                if (!user) return null;
+                // HC 待招卡片特调 UI
+                if (user.isVacant || user.talentTag === '待招HC') {
+                    return (
+                        <div draggable onDragStart={(e)=>handleDragStart(e, deptId, groupTitle, user)} onDragEnd={handleDragEnd} onDragOver={handleDragOver} onDrop={(e)=>handleDrop(e, deptId, groupTitle, mIdx)} className="relative flex flex-col p-2.5 rounded-lg border border-dashed border-blue-500/50 bg-blue-950/20 opacity-80 group cursor-grab active:cursor-grabbing hover:bg-blue-900/30 transition-all">
+                            <span className="text-[13px] font-bold text-blue-400">{user.name}</span>
+                            <div className="flex gap-2 mt-1 items-center">
+                                <span className="bg-blue-500/20 text-blue-300 border border-blue-500/30 px-1.5 py-0.5 rounded text-[10px]">待招 HC</span>
+                            </div>
+                            <button onClick={(e) => { e.stopPropagation(); removeHc(user.id); }} className="absolute top-2 right-2 text-slate-500 hover:text-red-400 opacity-0 group-hover:opacity-100"><X className="w-3 h-3"/></button>
+                        </div>
+                    );
+                }
+
+                const score = Number(user.score);
+                let classes = "bg-slate-900 border-slate-700 hover:border-slate-500 cursor-grab active:cursor-grabbing";
+                let txtClass = "text-slate-100", scoreCls = "text-green-400 bg-slate-950 border-slate-800", Icon = null;
+
+                if (!isNaN(score)) {
+                    if (score < 60) {
+                        classes = "bg-red-950/30 border-red-900/60 ring-1 ring-red-500/50 shadow-[0_0_10px_rgba(239,68,68,0.2)]"; 
+                        txtClass = "text-red-400"; scoreCls = "text-red-400 bg-red-950 border-red-900/50 font-bold";
+                        Icon = <ShieldAlert className="absolute -top-2 -right-2 w-5 h-5 text-red-500 bg-[#0B1120] rounded-full" />;
+                    } else if (score < 80) {
+                        classes = "bg-yellow-950/20 border-yellow-800/50 ring-1 ring-yellow-500/40 shadow-[0_0_10px_rgba(234,179,8,0.1)]"; 
+                        txtClass = "text-yellow-400"; scoreCls = "text-yellow-400 bg-yellow-950 border-yellow-900/50 font-bold";
+                        Icon = <AlertTriangle className="absolute -top-1.5 -right-1.5 w-4 h-4 text-yellow-500 bg-[#0B1120] rounded-full" />;
+                    }
+                }
+                
+                if (user.talentTag === '待离职') txtClass += " line-through opacity-70";
+
+                const empDetails = calculateEmploymentDetails(user.entryDate, user.type);
+                const isPending = empDetails.status.includes('待入职');
+
+                return (
+                    <div draggable onDragStart={(e)=>handleDragStart(e, deptId, groupTitle, user)} onDragEnd={handleDragEnd} onDragOver={handleDragOver} onDrop={(e)=>handleDrop(e, deptId, groupTitle, mIdx)} onClick={() => {setSelectedUser(user); setIsDrawerOpen(true);}} className={`relative flex flex-col p-2.5 rounded-lg border transition-all ${classes} ${isPending ? 'opacity-75 border-dashed border-slate-500 bg-slate-900/60' : ''}`}>
+                        {Icon}
+                        <div className="flex justify-between items-center w-full mb-1.5">
+                            <span className={`text-[14px] font-bold whitespace-nowrap transition-colors ${txtClass}`}>{user.name}</span>
+                            {user.score !== undefined && <span className={`text-[11px] whitespace-nowrap px-1.5 py-0.5 rounded border transition-colors ${scoreCls}`}>{score}分</span>}
+                        </div>
+                        
+                        <div className="flex flex-wrap items-center gap-1.5 w-full">
+                            {getStatusBadge(empDetails.status)}
+                            {user.talentTag && user.talentTag !== '待离职' && (
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded border ${
+                                    user.talentTag === '核心骨干' ? 'bg-yellow-900/40 text-yellow-300 border-yellow-500/40' :
+                                    user.talentTag === '主子背' ? 'bg-rose-900/40 text-rose-300 border-rose-500/40' :
+                                    user.talentTag === '高潜' ? 'bg-blue-900/40 text-blue-300 border-blue-500/40' :
+                                    'bg-indigo-900/40 text-indigo-300 border-indigo-500/30'
+                                }`}>{user.talentTag}</span>
+                            )}
+                        </div>
+                    </div>
+                );
             };
 
             const handleSyncResigned = (e) => {
@@ -442,236 +706,6 @@
                 }
             };
 
-            const openAddEmpModal = (deptId, groupTitle) => {
-                setAddEmpTarget({ deptId, groupTitle });
-                setShowAddEmpModal(true);
-            };
-
-            const handleAiAddEmployee = (e) => {
-                const file = e.target.files[0];
-                if (!file) return;
-                if (!sfApiKey) { alert("请先前往配置库填写 硅基流动 API Key，否则无法调用智能解析引擎！"); return; }
-                
-                setIsParsingFile(true);
-                const reader = new FileReader();
-                reader.onload = async (event) => {
-                    let content = event.target.result;
-                    if (content.includes('<html')) {
-                        const doc = new DOMParser().parseFromString(content, 'text/html');
-                        content = doc.body.textContent.replace(/\s+/g, ' ').trim();
-                    }
-                    content = content.substring(0, 3000); 
-
-                    const sysPrompt = `你是一个智能HR系统核心引擎。请从以下上传的资料文本中，精准提取人员的简历信息。
-要求：严格返回JSON格式，绝不要携带Markdown符号。
-返回JSON结构为：{"name":"张三", "school":"复旦大学", "education":"本科", "salary":"15000", "age": 25}。
-如果某项在资料里找不到，请自动填入合理的默认值。`;
-                    
-                    try {
-                        const aiText = await fetchSiliconFlowAPI(sysPrompt, content);
-                        const info = parseAIResponse(aiText);
-                        
-                        const newUser = {
-                            id: "emp_" + Date.now(),
-                            name: info.name || "新员工",
-                            role: addEmpTarget.groupTitle,
-                            type: "正式员工（待入职）",
-                            entryDate: CURRENT_DATE.toISOString().split('T')[0],
-                            score: 100,
-                            age: info.age || 24,
-                            school: info.school || "未知",
-                            education: info.education || "本科",
-                            salary: info.salary || "未知",
-                            talentTag: "", 
-                            behaviors: []
-                        };
-
-                        let newData = { ...data };
-                        newData.departments = newData.departments.map(dept => {
-                            if (dept.id !== addEmpTarget.deptId) return dept;
-                            let newDept = { ...dept };
-                            const listKey = newDept.isSpanning ? 'branches' : 'roles';
-                            newDept[listKey] = newDept[listKey].map(g => {
-                                if (g.title !== addEmpTarget.groupTitle) return g;
-                                return { ...g, members: [...g.members, newUser] };
-                            });
-                            return newDept;
-                        });
-
-                        setData(newData);
-                        setShowAddEmpModal(false);
-                    } catch (err) {
-                        alert("解析或生成卡片失败: " + err.message);
-                    } finally {
-                        setIsParsingFile(false);
-                        if(addEmpFileRef.current) addEmpFileRef.current.value = "";
-                    }
-                };
-                reader.readAsText(file);
-            };
-
-            const handleDragStart = (e, deptId, groupTitle, user) => {
-                dragRef.current = { deptId, groupTitle, user };
-                e.dataTransfer.effectAllowed = "move";
-                e.target.classList.add('dragging-card');
-            };
-
-            const handleDragEnd = (e) => { e.target.classList.remove('dragging-card'); };
-            const handleDragOver = (e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; };
-
-            const handleDrop = (e, targetDeptId, targetGroupTitle, targetIndex) => {
-                e.preventDefault(); e.stopPropagation();
-                const source = dragRef.current;
-                if (!source) return;
-
-                if (source.deptId === targetDeptId && source.groupTitle === targetGroupTitle && targetIndex !== -1) {
-                     const tList = data.departments.find(d=>d.id===targetDeptId)?.[data.departments.find(d=>d.id===targetDeptId).isSpanning ? 'branches':'roles'].find(g=>g.title===targetGroupTitle)?.members;
-                     if (tList && tList[targetIndex]?.id === source.user.id) return; 
-                }
-
-                let newData = { ...data };
-                let draggedUser = { ...source.user }; 
-
-                newData.departments = newData.departments.map(dept => {
-                    if (dept.id !== source.deptId) return dept;
-                    let newDept = { ...dept };
-                    const listKey = newDept.isSpanning ? 'branches' : 'roles';
-                    newDept[listKey] = newDept[listKey].map(g => {
-                        if (g.title !== source.groupTitle) return g;
-                        return { ...g, members: g.members.filter(m => m.id !== draggedUser.id) };
-                    });
-                    return newDept;
-                });
-
-                draggedUser.role = targetGroupTitle; 
-                
-                newData.departments = newData.departments.map(dept => {
-                    if (dept.id !== targetDeptId) return dept;
-                    let newDept = { ...dept };
-                    const listKey = newDept.isSpanning ? 'branches' : 'roles';
-                    newDept[listKey] = newDept[listKey].map(g => {
-                        if (g.title !== targetGroupTitle) return g;
-                        let newMembers = [...g.members];
-                        if (targetIndex === -1) { newMembers.push(draggedUser); } 
-                        else { newMembers.splice(targetIndex, 0, draggedUser); }
-                        return { ...g, members: newMembers };
-                    });
-                    return newDept;
-                });
-
-                setData(newData);
-                dragRef.current = null;
-            };
-
-            const handleFileForDrawer = (e) => {
-                const file = e.target.files[0];
-                if (!file) return;
-                setIsParsingFile(true);
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    let content = event.target.result;
-                    if (content.includes('<html')) {
-                        const doc = new DOMParser().parseFromString(content, 'text/html');
-                        content = doc.body.textContent.replace(/\s+/g, ' ').trim();
-                    }
-                    if (/\x00/.test(content)) content = `[文件二进制流提取成功: ${file.name} - 请直接点击提取按钮]`;
-                    setAiInputText(content);
-                    setIsParsingFile(false);
-                };
-                reader.readAsText(file);
-            };
-
-            const handleGenerateAIProfile = async () => {
-                if (!aiInputText.trim()) return;
-                setIsAiGenerating(true);
-                const sysPrompt = `你是一位专业的游戏行业HRBP。请根据用户提供的资料，提取结构化的【基础人才画像】。直接输出合法的JSON，不要Markdown代码块。格式：\n{"summary": "50字以内评价", "tags": ["标签1", "标签2"], "icebergAbove": [{"skill": "硬技能", "level": "及格/较差/优秀", "desc": "佐证"}], "icebergBelow": [{"trait": "软素质", "score": "分值/表现", "desc": "佐证"}]}`;
-                try {
-                    const content = await fetchSiliconFlowAPI(sysPrompt, aiInputText);
-                    const profileData = parseAIResponse(content);
-                    updateGlobalUser({ ...selectedUser, aiProfile: profileData });
-                    setAiInputText("");
-                } catch (err) {
-                    if (err.message === "API_KEY_MISSING") alert("请先前往右上角系统配置填写 硅基流动 API Key！");
-                    else alert("解析失败: " + err.message);
-                } finally {
-                    setIsAiGenerating(false);
-                }
-            };
-
-            const handleGenerateStrategy = async () => {
-                if (!strategyInput.trim()) return;
-                setIsStrategyLoading(true);
-                let highRiskStaff = [];
-                const checkUser = (u) => { if(u && !u.isVacant && Number(u.score)<80) highRiskStaff.push(`${u.name}(${u.role}, ${u.score}分)`) };
-                checkUser(data.producer);
-                data.departments.forEach(d => {
-                    checkUser(d.lead);
-                    if(d.isSpanning) d.branches.forEach(b => b.members.forEach(checkUser));
-                    else d.roles.forEach(r => r.members.forEach(checkUser));
-                });
-                const sysPrompt = `你是一位顶尖的OD专家。根据现状及目标，输出JSON格式推演报告，不要Markdown：\n{"feasibility": "高/中/低", "riskAnalysis": "痛点与爆雷风险分析(100字)", "actions": [{"type": "内部调整", "desc": "行动建议"}, {"type": "外部招聘", "desc": "建议"}]}`;
-                const userPrompt = `【目标】：${strategyInput}\n【高危卡点人员】：${highRiskStaff.join('; ') || '无'}\n请帮我出具干预策略。`;
-                try {
-                    const content = await fetchSiliconFlowAPI(sysPrompt, userPrompt);
-                    setStrategyReport(parseAIResponse(content));
-                } catch (err) {
-                    if (err.message === "API_KEY_MISSING") alert("请先前往右上角系统配置填写 硅基流动 API Key！");
-                    else alert("推演失败: " + err.message);
-                } finally {
-                    setIsStrategyLoading(false);
-                }
-            };
-
-            const handleSubmitScore = () => {
-                let penalty = scoreMode === 'rule' ? (selectedRule?.penalty || 0) : Number(manualScoreChange);
-                if (isNaN(penalty) || penalty === 0 || !observation.trim()) return alert("请完整填写事实备注！");
-
-                const newBehavior = { 
-                    date: CURRENT_DATE.toISOString().split('T')[0], 
-                    desc: `【${scoreMode==='rule'?selectedRule.name:'手动调整'}】 ${observation}`, 
-                    penalty: penalty, 
-                    type: penalty < 0 ? 'negative' : 'positive' 
-                };
-                
-                const newScore = Math.min(100, Math.max(0, (Number(selectedUser.score) || 100) + penalty));
-                updateGlobalUser({
-                    ...selectedUser,
-                    score: newScore,
-                    behaviors: [newBehavior, ...(selectedUser.behaviors || [])],
-                    dynamicTags: Array.from(new Set([...(selectedUser.dynamicTags || []), ...(selectedRule?.tags || [])]))
-                });
-                
-                setObservation(""); setSelectedRule(null); setManualScoreChange("");
-            };
-
-            const handleConfirmResign = () => {
-                if(!resignReason) return alert("请填写原因");
-                setResignedStaff([...resignedStaff, {...selectedUser, resignDate: CURRENT_DATE.toISOString().split('T')[0], resignReason}]);
-                
-                const newData = { ...data };
-                newData.departments = newData.departments.map(dept => {
-                    if (dept.lead?.id === selectedUser.id) return { ...dept, lead: { id: `vacant_${Math.random()}`, isVacant: true, role: `${dept.name}负责人(待招)` } };
-                    if (dept.isSpanning) return { ...dept, branches: dept.branches.map(b => ({ ...b, members: b.members.filter(m => m.id !== selectedUser.id) })) };
-                    return { ...dept, roles: dept.roles.map(r => ({ ...r, members: r.members.filter(m => m.id !== selectedUser.id) })) };
-                });
-                setData(newData);
-                setIsDrawerOpen(false); setShowResignModal(false); setResignReason("");
-            };
-
-            const handleDeleteTemplate = (id) => { setScoringTemplates(scoringTemplates.filter(t => t.id !== id)); };
-
-            const handleAddDraftRule = () => {
-                if (!draftRuleName.trim() || !draftRulePenalty) return;
-                setNewTplRules([...newTplRules, { id: `r_${Math.random()}`, name: draftRuleName, penalty: Number(draftRulePenalty), type: Number(draftRulePenalty) < 0 ? "negative" : "positive", tags: [] }]);
-                setDraftRuleName(""); setDraftRulePenalty("");
-            };
-
-            const handleSaveNewTemplate = () => {
-                if (!newTplName.trim()) return alert("请输入名称");
-                setScoringTemplates([...scoringTemplates, { id: `tpl_${Math.random()}`, name: newTplName, rules: newTplRules }]);
-                setIsCreatingTpl(false); setNewTplName(""); setNewTplRules([]);
-            };
-
             const handleResetData = () => {
                 if(window.confirm("危险操作：将清除所有人员、打分及模板数据，恢复至系统出厂设置。确认继续？")) {
                     localStorage.removeItem('beta_team_data');
@@ -681,92 +715,16 @@
                 }
             };
 
-            const groupedResigned = resignedStaff.reduce((acc, staff) => {
-                const role = staff.role || '';
-                let cat = '其他支撑线';
-                if (role.includes('策') || role.includes('关卡') || role.includes('数值')) cat = '策划中枢';
-                else if (role.includes('程') || role.includes('开发') || role.includes('端') || role.includes('技术')) cat = '程序与技术';
-                else if (role.includes('美') || role.includes('原画') || role.includes('动效') || role.includes('UI')) cat = '美术中心';
-                else if (role.includes('测') || role.includes('QA')) cat = '测试 QA';
-                else if (role.includes('视频') || role.includes('投放') || role.includes('运营') || role.includes('市场')) cat = '市场与发行';
-                
-                if (!acc[cat]) acc[cat] = [];
-                acc[cat].push(staff);
-                return acc;
-            }, {});
-
-            const EmployeeCard = ({ user }) => {
-                if (user.isVacant) return <div className="p-2 rounded-lg border border-dashed border-slate-600 bg-slate-900/40 opacity-70"><span className="text-[11px] text-slate-400">{user.role}</span></div>;
-
-                const score = Number(user.score);
-                let classes = "bg-slate-900 border-slate-700 hover:border-slate-500 cursor-grab active:cursor-grabbing";
-                let txtClass = "text-slate-100";
-                let scoreCls = "text-green-400 bg-slate-950 border-slate-800";
-                let Icon = null;
-
-                // 仅仅基于【分数】动态计算外框与名字颜色
-                if (!isNaN(score)) {
-                    if (score < 60) {
-                        classes = "bg-red-950/30 border-red-900/60 ring-1 ring-red-500/50 shadow-[0_0_10px_rgba(239,68,68,0.2)] cursor-grab active:cursor-grabbing"; 
-                        txtClass = "text-red-400"; 
-                        scoreCls = "text-red-400 bg-red-950 border-red-900/50 font-bold";
-                        Icon = <ShieldAlert className="absolute -top-2 -right-2 w-5 h-5 text-red-500 bg-[#0B1120] rounded-full" />;
-                    } else if (score < 80) {
-                        classes = "bg-yellow-950/20 border-yellow-800/50 ring-1 ring-yellow-500/40 shadow-[0_0_10px_rgba(234,179,8,0.1)] cursor-grab active:cursor-grabbing"; 
-                        txtClass = "text-yellow-400"; 
-                        scoreCls = "text-yellow-400 bg-yellow-950 border-yellow-900/50 font-bold";
-                        Icon = <AlertTriangle className="absolute -top-1.5 -right-1.5 w-4 h-4 text-yellow-500 bg-[#0B1120] rounded-full" />;
-                    }
-                }
-                
-                // 【待离职】标签仅仅追加“横线和半透明效果”
-                if (user.talentTag === '待离职') {
-                    txtClass += " line-through opacity-70";
-                }
-
-                // 待入职状态的虚线处理 (由底层引擎保证强一致性)
-                const empDetails = calculateEmploymentDetails(user.entryDate, user.type);
-                const isPending = empDetails.status.includes('待入职');
-
-                return (
-                    <div onClick={() => {if(!user.isVacant){setSelectedUser(user); setIsDrawerOpen(true);}}} className={`relative flex flex-col p-2.5 rounded-lg border transition-all ${classes} ${isPending ? 'opacity-75 border-dashed border-slate-500 bg-slate-900/60' : ''}`}>
-                        {Icon}
-                        
-                        {/* Header: 名字与分数 */}
-                        <div className="flex justify-between items-center w-full mb-1.5">
-                            <span className={`text-[15px] font-bold whitespace-nowrap transition-colors ${txtClass}`}>{user.name}</span>
-                            {user.score !== undefined && <span className={`text-[11px] whitespace-nowrap px-1.5 py-0.5 rounded border transition-colors ${scoreCls}`}>{score}分</span>}
-                        </div>
-                        
-                        {/* Tags: 用工徽章 + 特殊盘点标签 (极简版) */}
-                        <div className="flex flex-wrap items-center gap-1.5 w-full">
-                            {getStatusBadge(empDetails.status)}
-                            {user.talentTag && user.talentTag !== '待离职' && (
-                                <span className={`text-[10px] px-1.5 py-0.5 rounded border ${
-                                    user.talentTag === '核心骨干' ? 'bg-yellow-900/40 text-yellow-300 border-yellow-500/40' :
-                                    user.talentTag === '主子背' ? 'bg-rose-900/40 text-rose-300 border-rose-500/40' :
-                                    user.talentTag === '高潜' ? 'bg-blue-900/40 text-blue-300 border-blue-500/40' :
-                                    'bg-indigo-900/40 text-indigo-300 border-indigo-500/30'
-                                }`}>{user.talentTag}</span>
-                            )}
-                            {user.aiProfile && <Sparkles className="ml-auto w-3 h-3 text-blue-400 animate-pulse" title="已生成AI画像" />}
-                        </div>
-                    </div>
-                );
-            };
-
             return (
                 <div className="min-h-screen p-6">
                     {/* Header */}
                     <div className="flex justify-between items-end border-b border-slate-800/80 pb-5 mb-6 min-w-[1500px]">
                         <div>
                             <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent flex items-center gap-3">
-                                <Briefcase className="w-8 h-8 text-blue-500" /> 纸牌项目组 · 组织效能大盘
+                                <Briefcase className="w-8 h-8 text-blue-500" /> 纸牌项目组 · OD阵型全景图
                             </h1>
                             <div className="text-slate-400 mt-4 flex items-center gap-6">
-                                <span className="flex items-center gap-1.5"><Calendar className="w-4 h-4 text-slate-500"/> 锚点时间: <strong className="text-slate-300">2026-06-18</strong></span>
-                                <span className="flex items-center gap-1.5 text-yellow-500/80 text-xs"><span className="inline-block w-2 h-2 bg-yellow-500 rounded-full"></span> 警告 (&lt;80分)</span>
-                                <span className="flex items-center gap-1.5 text-red-500/80 text-xs"><span className="inline-block w-2 h-2 bg-red-500 rounded-full"></span> 淘汰 (&lt;60分)</span>
+                                <span className="flex items-center gap-1.5"><Calendar className="w-4 h-4 text-slate-500"/> 系统时间: <strong className="text-slate-300">2026-06-18</strong></span>
                                 <div className="ml-4 flex bg-slate-900 rounded-lg p-1 border border-slate-800">
                                     <button onClick={()=>setActiveTab('kanban')} className={`px-4 py-1.5 rounded text-sm font-bold transition-all ${activeTab==='kanban' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'}`}>排兵布阵大盘</button>
                                     <button onClick={()=>setActiveTab('strategy')} className={`px-4 py-1.5 rounded text-sm font-bold flex items-center gap-1.5 transition-all ${activeTab==='strategy' ? 'bg-purple-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'}`}><BrainCircuit className="w-4 h-4"/> AI HRBP 策略中枢</button>
@@ -776,16 +734,16 @@
                         <div className="flex items-center gap-3">
                             <label className="flex items-center gap-2 px-4 py-2 bg-emerald-900/40 hover:bg-emerald-800/60 text-emerald-400 border border-emerald-700/50 rounded-lg text-sm font-bold cursor-pointer transition-all">
                                 {isSyncingExcel ? <Loader2 className="w-4 h-4 animate-spin"/> : <FileSpreadsheet className="w-4 h-4"/>}
-                                {isSyncingExcel ? "同步大盘中..." : "📥 智能同步花名册"}
+                                📥 智能同步花名册
                                 <input type="file" className="hidden" accept=".xlsx,.xls,.csv" onChange={handleSyncRoster} ref={syncExcelRef} />
                             </label>
                             <button onClick={() => setShowSettingsModal(true)} className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-sm border border-slate-700">
-                                <Settings className="w-4 h-4"/> 全局系统配置
+                                <FileCog className="w-4 h-4"/> API及全局配置
                             </button>
                         </div>
                     </div>
 
-                    {/* === Tab 1: Kanban 看板 === */}
+                    {/* === 看板主体 === */}
                     {activeTab === 'kanban' && (
                         <div className="w-full pb-20 min-w-[2000px]">
                             {/* 制作人 */}
@@ -794,61 +752,67 @@
                                     <div className="bg-slate-900 rounded-lg p-3 flex flex-col items-center justify-center cursor-pointer hover:bg-slate-800" onClick={() => {setSelectedUser(data.producer);setIsDrawerOpen(true);}}>
                                         <div className="text-[10px] text-blue-400 font-bold mb-1 uppercase tracking-widest">{data.producer.role}</div>
                                         <div className="font-bold text-lg text-slate-100 mb-1">{data.producer.name}</div>
-                                        <div className="flex gap-2 text-xs"><span className="text-slate-400">{data.producer.score}分</span><span className="text-orange-400">{data.producer.talentTag}</span></div>
                                     </div>
                                 </div>
                                 <div className="absolute top-full left-1/2 w-px h-10 bg-slate-700"></div>
                             </div>
 
+                            {/* 五大中心平行排列 */}
                             <div className="flex gap-6 items-start justify-center">
-                                {/* 策划部跨列渲染 */}
-                                <div className="w-[850px] shrink-0 rounded-2xl border border-blue-500/30 bg-gradient-to-b from-blue-900/10 to-slate-900/50 flex flex-col shadow-xl">
-                                    <div className="p-2.5 font-bold text-[13px] text-center tracking-widest bg-blue-950/60 text-blue-300 border-b border-blue-500/20 rounded-t-2xl">策划研发中枢</div>
-                                    <div className="p-5 flex flex-col items-center relative">
-                                        <div className="w-56 mb-8 relative z-10 group"><EmployeeCard user={data.departments[0].lead} /><div className="absolute left-1/2 top-full w-px h-8 bg-blue-500/30"></div></div>
-                                        <div className="w-[85%] border-t border-blue-500/30 relative h-6">
-                                            <div className="absolute top-0 left-0 w-px h-6 bg-blue-500/30"></div><div className="absolute top-0 left-[33.33%] w-px h-6 bg-blue-500/30"></div><div className="absolute top-0 left-[66.66%] w-px h-6 bg-blue-500/30"></div><div className="absolute top-0 right-0 w-px h-6 bg-blue-500/30"></div>
+                                {data.departments.map(dept => (
+                                    <div key={dept.id} className={`${dept.isSpanning ? (dept.groups.length > 3 ? 'w-[850px]' : 'w-[650px]') : 'w-[250px]'} shrink-0 rounded-2xl border border-slate-700/60 bg-slate-900/40 flex flex-col shadow-xl`}>
+                                        <div className="p-2.5 font-bold text-[13px] tracking-widest bg-slate-800/80 text-slate-300 border-b border-slate-700/60 rounded-t-2xl flex justify-between items-center px-4">
+                                            <span>{dept.name}</span>
+                                            <button onClick={() => addGroup(dept.id)} className="text-slate-400 hover:text-white bg-slate-700 p-1 rounded" title="添加子集/业务线"><Plus className="w-3 h-3"/></button>
                                         </div>
-                                        <div className="w-full grid grid-cols-4 gap-4">
-                                            {data.departments[0].branches.map((b, idx) => (
-                                                <div key={idx} className="flex flex-col gap-2 min-h-[100px] pb-4" onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, data.departments[0].id, b.title, -1)}>
-                                                    <div className="text-[11px] font-bold text-blue-200/50 flex items-center bg-slate-900/80 rounded-md px-2 py-1.5 border border-slate-800">{b.title}</div>
-                                                    {b.members.map((m, mIdx) => (
-                                                        <div key={m.id} draggable onDragStart={(e)=>handleDragStart(e, data.departments[0].id, b.title, m)} onDragEnd={handleDragEnd} onDragOver={handleDragOver} onDrop={(e)=>handleDrop(e, data.departments[0].id, b.title, mIdx)}>
-                                                            <EmployeeCard user={m} />
-                                                        </div>
-                                                    ))}
-                                                    <button onClick={() => openAddEmpModal(data.departments[0].id, b.title)} className="mt-1 w-full py-1.5 flex justify-center items-center gap-1 border border-dashed border-blue-900/50 text-blue-500/60 rounded hover:border-blue-500 hover:text-blue-400 hover:bg-blue-950/30 transition-colors text-[11px] font-bold"><Plus className="w-3 h-3"/> 新增入职</button>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                </div>
+                                        <div className="p-5 flex flex-col items-center relative">
+                                            
+                                            {/* 部门负责人 */}
+                                            <div className="w-56 mb-8 relative z-10 group" onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, dept.id, 'lead', -1)}>
+                                                {dept.lead ? (
+                                                    <><EmployeeCard user={dept.lead} deptId={dept.id} groupTitle="lead" mIdx={-1} /><div className="absolute left-1/2 top-full w-px h-8 bg-slate-600/50"></div></>
+                                                ) : (
+                                                    <div onClick={() => { setAddTarget({ deptId: dept.id, groupTitle: '负责人', isLead: true }); setShowAddEmpModal(true); }} className="p-4 border-2 border-dashed border-slate-700 rounded-lg flex justify-center items-center cursor-pointer hover:border-slate-500 hover:bg-slate-800/50 transition-all">
+                                                        <span className="text-xs text-slate-500 font-bold">+ 虚位以待 (负责人)</span>
+                                                    </div>
+                                                )}
+                                            </div>
 
-                                {/* 平行部门 */}
-                                <div className="flex gap-4 shrink-0">
-                                    {data.departments.slice(1).map((dept) => (
-                                        <div key={dept.id} className="w-[250px] shrink-0 rounded-2xl border border-slate-700/60 bg-slate-900/40 flex flex-col shadow-lg">
-                                            <div className="p-2.5 font-bold text-[13px] text-center tracking-widest bg-slate-800/80 text-slate-300 border-b border-slate-700/60 rounded-t-2xl">{dept.name}</div>
-                                            <div className="p-4 flex flex-col gap-4">
-                                                {dept.lead && <div className="relative pb-4 border-b border-slate-700/50 mb-1 group"><EmployeeCard user={dept.lead} /></div>}
-                                                {dept.roles.map((r, rIdx) => (
-                                                    <div key={rIdx} className="flex flex-col gap-2 min-h-[100px] pb-2" onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, dept.id, r.title, -1)}>
-                                                        <div className="text-[10px] font-bold text-slate-500 flex items-center border-b border-slate-800 pb-1 mb-1"><span className="uppercase">{r.title}</span></div>
-                                                        {r.members.map((m, mIdx) => (
-                                                            <div key={m.id} draggable onDragStart={(e)=>handleDragStart(e, dept.id, r.title, m)} onDragEnd={handleDragEnd} onDragOver={handleDragOver} onDrop={(e)=>handleDrop(e, dept.id, r.title, mIdx)}>
-                                                                <EmployeeCard user={m} />
-                                                            </div>
+                                            {/* 横向分支连线 (仅针对多组且Spanning) */}
+                                            {dept.isSpanning && dept.groups.length > 1 && (
+                                                <div className="w-[85%] border-t border-slate-600/50 relative h-6">
+                                                    {dept.groups.map((_, i) => (
+                                                        <div key={i} className="absolute top-0 w-px h-6 bg-slate-600/50" style={{ left: `${(i / (dept.groups.length - 1)) * 100}%` }}></div>
+                                                    ))}
+                                                </div>
+                                            )}
+
+                                            {/* 各业务子组 */}
+                                            <div className={`w-full ${dept.isSpanning ? `grid grid-cols-${dept.groups.length > 4 ? 4 : dept.groups.length} gap-4` : 'flex flex-col gap-6'}`}>
+                                                {dept.groups.map((g, idx) => (
+                                                    <div key={idx} className="flex flex-col gap-2 min-h-[100px] pb-4 group/box" onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, dept.id, g.title, -1)}>
+                                                        <div className="text-[11px] font-bold text-slate-400 flex justify-between items-center bg-slate-950/80 rounded-md px-2 py-1.5 border border-slate-800">
+                                                            <span>{g.title}</span>
+                                                            <button onClick={() => removeGroup(dept.id, g.title)} className="text-slate-600 hover:text-red-400 opacity-0 group-hover/box:opacity-100 transition-all"><Trash2 className="w-3 h-3"/></button>
+                                                        </div>
+                                                        {g.members.map((m, mIdx) => (
+                                                            <EmployeeCard key={m.id} user={m} deptId={dept.id} groupTitle={g.title} mIdx={mIdx} />
                                                         ))}
-                                                        <button onClick={() => openAddEmpModal(dept.id, r.title)} className="mt-1 w-full py-1.5 flex justify-center items-center gap-1 border border-dashed border-slate-700 text-slate-500 rounded hover:border-slate-500 hover:text-slate-300 hover:bg-slate-800/50 transition-colors text-[11px] font-bold"><Plus className="w-3 h-3"/> 新增入职</button>
+                                                        
+                                                        {/* 底部新增双按钮 */}
+                                                        <div className="flex gap-1 mt-1">
+                                                            <button onClick={() => { setAddTarget({deptId: dept.id, groupTitle: g.title}); setShowAddEmpModal(true); }} className="flex-1 py-1.5 flex justify-center items-center gap-1 border border-dashed border-slate-700 text-slate-500 rounded hover:border-slate-500 hover:text-slate-300 hover:bg-slate-800/50 transition-colors text-[10px] font-bold"><Plus className="w-3 h-3"/> 入职</button>
+                                                            <button onClick={() => { setAddTarget({deptId: dept.id, groupTitle: g.title}); setHcData({...hcData, name: g.title}); setShowAddHcModal(true); }} className="flex-1 py-1.5 flex justify-center items-center gap-1 border border-dashed border-blue-900/50 text-blue-500/60 rounded hover:border-blue-500 hover:text-blue-400 hover:bg-blue-950/30 transition-colors text-[10px] font-bold"><UserPlus className="w-3 h-3"/> HC</button>
+                                                        </div>
                                                     </div>
                                                 ))}
                                             </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
 
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                            
                             {/* --- 离职库与批量导入区 --- */}
                             <div className="mt-20 pt-8 border-t border-dashed border-slate-800 max-w-[1500px] mx-auto">
                                 <div className="flex justify-between items-center mb-6">
@@ -860,23 +824,16 @@
                                     </label>
                                 </div>
                                 {resignedStaff.length > 0 ? (
-                                    <div className="flex flex-wrap items-start gap-x-8 gap-y-6">
-                                        {Object.entries(groupedResigned).map(([cat, staffs]) => (
-                                            <div key={cat} className="mb-2 min-w-[280px]">
-                                                <h3 className="text-[12px] font-bold text-slate-500 mb-3 border-l-2 border-slate-600 pl-2 uppercase tracking-widest">{cat} ({staffs.length}人)</h3>
-                                                <div className="flex flex-col gap-3">
-                                                    {staffs.map((staff, idx) => (
-                                                        <div key={staff.id || idx} className="w-64 bg-slate-900/40 border border-slate-800 p-4 rounded-xl relative group hover:bg-slate-900/80 transition-all">
-                                                            <div className="font-bold text-slate-300 border-b border-slate-800/80 pb-2 mb-2 pr-6 truncate">{staff.name} <span className="text-xs text-slate-500 font-normal ml-2">{staff.role}</span></div>
-                                                            <div className="text-xs text-slate-400 space-y-1.5">
-                                                                <div><span className="text-slate-600">离职时间：</span>{staff.resignDate}</div>
-                                                                <div><span className="text-slate-600">最终分值：</span>{staff.score}分</div>
-                                                                <div className="text-red-400/80 bg-red-950/20 p-2 rounded mt-2 border border-red-900/30 line-clamp-3" title={staff.resignReason}><strong className="text-red-400">原因：</strong>{staff.resignReason}</div>
-                                                            </div>
-                                                            <button onClick={() => removeResignedStaff(staff.id)} className="absolute top-3 right-3 text-slate-600 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100" title="彻底删除"><Trash2 className="w-4 h-4"/></button>
-                                                        </div>
-                                                    ))}
+                                    <div className="flex flex-wrap gap-4">
+                                        {resignedStaff.map((staff, idx) => (
+                                            <div key={staff.id || idx} className="w-64 bg-slate-900/40 border border-slate-800 p-4 rounded-xl relative group">
+                                                <div className="font-bold text-slate-300 border-b border-slate-800/80 pb-2 mb-2 pr-6 truncate">{staff.name} <span className="text-xs text-slate-500 font-normal ml-2">{staff.role}</span></div>
+                                                <div className="text-xs text-slate-400 space-y-1.5">
+                                                    <div><span className="text-slate-600">离职时间：</span>{staff.resignDate}</div>
+                                                    <div><span className="text-slate-600">最终分值：</span>{staff.score}分</div>
+                                                    <div className="text-red-400/80 bg-red-950/20 p-2 rounded mt-2 border border-red-900/30 line-clamp-3" title={staff.resignReason}><strong className="text-red-400">原因：</strong>{staff.resignReason}</div>
                                                 </div>
+                                                <button onClick={() => removeResignedStaff(staff.id)} className="absolute top-3 right-3 text-slate-600 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100" title="彻底删除"><Trash2 className="w-4 h-4"/></button>
                                             </div>
                                         ))}
                                     </div>
@@ -890,21 +847,13 @@
                     {/* === Tab 2: AI HRBP 策略中枢 === */}
                     {activeTab === 'strategy' && (
                         <div className="max-w-[1200px] pb-20 animate-in fade-in duration-500">
+                            {/* 之前这里也有一个组件遗漏，已补齐 */}
                             <div className="grid grid-cols-4 gap-4 mb-6">
                                 <div className="bg-slate-900 border border-slate-700/60 p-5 rounded-xl shadow-lg">
                                     <div className="flex items-center gap-2 text-slate-400 text-xs mb-2"><Users className="w-4 h-4"/> 团队在岗总人数</div>
                                     <div className="text-3xl font-bold text-white">{getTeamMetrics().headcount} <span className="text-sm font-normal text-slate-500">人</span></div>
                                 </div>
                                 <div className="bg-slate-900 border border-slate-700/60 p-5 rounded-xl shadow-lg">
-                                    <div className="flex items-center gap-2 text-slate-400 text-xs mb-2"><LineChart className="w-4 h-4"/> 预估月度基本硬成本</div>
-                                    <div className="text-3xl font-bold text-emerald-400">¥ {getTeamMetrics().totalMonthlyCost}</div>
-                                    <div className="text-[10px] text-slate-500 mt-1">基于大盘数据粗算，不含绩效</div>
-                                </div>
-                                <div className="bg-slate-900 border border-slate-700/60 p-5 rounded-xl shadow-lg">
-                                    <div className="flex items-center gap-2 text-slate-400 text-xs mb-2"><PieChart className="w-4 h-4"/> 团队平均效能健康度</div>
-                                    <div className="text-3xl font-bold text-blue-400">{getTeamMetrics().avgScore} <span className="text-sm font-normal text-slate-500">分</span></div>
-                                </div>
-                                <div className="bg-red-950/20 border border-red-900/40 p-5 rounded-xl shadow-lg">
                                     <div className="flex items-center gap-2 text-red-400/80 text-xs mb-2"><ShieldAlert className="w-4 h-4"/> 状态异常/高危人数</div>
                                     <div className="text-3xl font-bold text-red-400">{getTeamMetrics().riskCount} <span className="text-sm font-normal text-red-500/70">人 (&lt;80分)</span></div>
                                 </div>
@@ -914,7 +863,7 @@
                                     <h3 className="text-sm font-bold text-slate-200 mb-4 flex items-center gap-2"><Target className="w-4 h-4 text-purple-400"/> 输入业务挑战与目标</h3>
                                     <textarea value={strategyInput} onChange={(e) => setStrategyInput(e.target.value)} className="w-full flex-1 bg-slate-950 border border-slate-700 rounded-lg p-3 text-sm text-slate-300 outline-none focus:border-purple-500 resize-none leading-relaxed mb-4" placeholder="例如：本月需要完成底层网络重构，我们的程序团队能扛得住吗？" />
                                     <button onClick={handleGenerateStrategy} disabled={isStrategyLoading || !strategyInput.trim()} className="w-full flex justify-center items-center gap-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-bold py-3 rounded-lg text-sm shadow-[0_0_15px_rgba(147,51,234,0.3)] transition-all">
-                                        {isStrategyLoading ? <Loader2 className="w-5 h-5 animate-spin"/> : <BrainCircuit className="w-5 h-5"/>} {isStrategyLoading ? "深度推演中..." : "召唤 AI HRBP 生成推演报告"}
+                                        {isStrategyLoading ? <Loader2 className="w-5 h-5 animate-spin"/> : <BrainCircuit className="w-5 h-5"/>} {isStrategyLoading ? "推演中..." : "生成推演报告"}
                                     </button>
                                 </div>
                                 <div className="col-span-2 bg-[#0F172A] border border-slate-700 rounded-xl p-6 shadow-xl relative overflow-hidden">
@@ -939,40 +888,11 @@
                         </div>
                     )}
 
-                    {/* AI 智能入职弹窗 */}
-                    {showAddEmpModal && (
-                        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[90] flex items-center justify-center p-4">
-                            <div className="bg-slate-900 border border-blue-900/40 rounded-2xl w-full max-w-lg p-6 shadow-[0_0_40px_rgba(59,130,246,0.15)]">
-                                <div className="flex justify-between items-center mb-6">
-                                    <h3 className="font-bold text-white flex items-center gap-2 text-lg"><UserPlus className="w-5 h-5 text-blue-400"/> AI 极速简历识别入职</h3>
-                                    <button onClick={() => setShowAddEmpModal(false)} className="text-slate-400 hover:text-white"><X className="w-5 h-5"/></button>
-                                </div>
-                                <div className="border-2 border-dashed border-slate-700 rounded-xl p-10 text-center bg-slate-950 hover:bg-slate-800 transition-colors relative overflow-hidden group">
-                                    {isParsingFile ? (
-                                        <>
-                                            <Loader2 className="w-12 h-12 animate-spin mx-auto text-blue-500 mb-4"/>
-                                            <p className="text-sm font-bold text-blue-400">大模型提取并建档中，请稍候...</p>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <UploadCloud className="w-12 h-12 mx-auto text-slate-500 mb-4 group-hover:text-blue-400 transition-colors"/>
-                                            <p className="text-base text-slate-300 mb-2">拖拽或点击上传应聘者简历/报告</p>
-                                            <p className="text-xs text-slate-500 mb-6">支持 .doc, .pdf, .txt 提取关键信息</p>
-                                            <input type="file" className="hidden" id="addEmpFile" onChange={handleAiAddEmployee} ref={addEmpFileRef} accept=".doc,.docx,.pdf,.txt,.html" />
-                                            <label htmlFor="addEmpFile" className="cursor-pointer bg-blue-600 hover:bg-blue-500 text-white px-6 py-2.5 rounded-lg text-sm font-bold shadow-md transition-all inline-block">一键识别并添加入职</label>
-                                        </>
-                                    )}
-                                </div>
-                                <p className="text-xs text-slate-500 mt-4 text-center">当前目标落位节点：<strong className="text-blue-400">{addEmpTarget?.groupTitle}</strong></p>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* 侧边抽屉: 员工详情 (5大模块) */}
+                    {/* === 侧边抽屉: 员工详情 (全面恢复了 5 大核心功能模块) === */}
                     {isDrawerOpen && selectedUser && (
                         <>
                             <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-40 transition-opacity" onClick={() => setIsDrawerOpen(false)}></div>
-                            <div className="fixed top-0 right-0 h-full w-full md:w-[700px] bg-[#0F172A] border-l border-slate-700 shadow-2xl z-50 flex flex-col">
+                            <div className="fixed top-0 right-0 h-full w-[550px] bg-[#0F172A] border-l border-slate-700 shadow-2xl z-50 flex flex-col">
                                 <div className="p-6 border-b border-slate-800 bg-slate-900/80 flex justify-between items-start">
                                     <div>
                                         <h2 className="text-2xl font-bold text-white flex items-center gap-3">
@@ -988,9 +908,7 @@
                                     <div className="flex gap-2">
                                         <button 
                                             onClick={() => {
-                                                if (isEditingProfile) {
-                                                    updateGlobalUser(selectedUser);
-                                                }
+                                                if (isEditingProfile) { updateGlobalUser(selectedUser); }
                                                 setIsEditingProfile(!isEditingProfile);
                                             }} 
                                             className={`p-2 rounded-lg transition-colors border ${isEditingProfile ? 'bg-blue-600 text-white border-blue-500 shadow-lg' : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'}`}
@@ -1003,45 +921,45 @@
                                     </div>
                                 </div>
                                 <div className="flex-1 overflow-y-auto p-6 space-y-7 custom-scrollbar bg-slate-950/30">
-                                    {/* 模块1 */}
+                                    
+                                    {/* 模块1：基础档案与属性管控 */}
                                     <div className="bg-slate-900 rounded-xl border border-slate-700/60 p-5 shadow-sm">
-                                        <h3 className="text-[11px] font-bold text-slate-400 mb-5 flex items-center gap-2 uppercase tracking-widest">1. 基础档案 (实时大盘联动)</h3>
+                                        <h3 className="text-[11px] font-bold text-slate-400 mb-5 flex items-center gap-2 uppercase tracking-widest">1. 基础档案与管控</h3>
                                         {isEditingProfile ? (
                                             <div className="grid grid-cols-2 gap-4 text-sm">
-                                                <div><label className="block text-[10px] text-slate-500 mb-1">姓名</label><input type="text" value={selectedUser.name} onChange={e=>setSelectedUser({...selectedUser, name: e.target.value})} className="w-full bg-slate-950 border border-slate-700 p-2 rounded text-white outline-none focus:border-blue-500" /></div>
+                                                <div><label className="block text-[10px] text-slate-500 mb-1">姓名</label><input type="text" value={selectedUser.name} onChange={e=>updateGlobalUser({...selectedUser, name: e.target.value})} className="w-full bg-slate-950 border border-slate-700 p-2.5 rounded text-white outline-none focus:border-blue-500" /></div>
                                                 
-                                                {/* 强制规范下拉菜单 1 */}
                                                 <div>
                                                     <label className="block text-[10px] text-slate-500 mb-1">合同用工类型</label>
-                                                    <select value={selectedUser.type || ''} onChange={e=>setSelectedUser({...selectedUser, type: e.target.value})} className="w-full bg-slate-950 border border-slate-700 p-2 rounded text-white outline-none focus:border-blue-500">
-                                                        <option value="正式员工">正式员工 (按司龄自动推算转正阶段)</option>
+                                                    <select value={selectedUser.type || ''} onChange={e=>updateGlobalUser({...selectedUser, type: e.target.value})} className="w-full bg-slate-950 border border-slate-700 p-2.5 rounded text-white outline-none">
+                                                        <option value="正式员工">正式员工 (按入职日自动推算阶段)</option>
                                                         <option value="正式员工（已转正）">正式员工 (强制已转正)</option>
-                                                        <option value="试用一期">试用一期 (手动指定)</option>
-                                                        <option value="试用二期">试用二期 (手动指定)</option>
+                                                        <option value="试用一期">试用一期 (强制干预)</option>
+                                                        <option value="试用二期">试用二期 (强制干预)</option>
                                                         <option value="正式员工（待入职）">正式员工（待入职）</option>
-                                                        <option value="实习生">实习生 (按日期自动推算)</option>
+                                                        <option value="实习生">实习生 (按日期推算)</option>
                                                         <option value="实习生（待入职）">实习生（待入职）</option>
-                                                        <option value="外派">外派</option>
+                                                        <option value="外派">外派驻点</option>
                                                     </select>
                                                 </div>
 
-                                                {/* 强制规范下拉菜单 2 */}
                                                 <div>
                                                     <label className="block text-[10px] text-slate-500 mb-1">特殊盘点标签</label>
-                                                    <select value={selectedUser.talentTag || ''} onChange={e=>setSelectedUser({...selectedUser, talentTag: e.target.value})} className="w-full bg-slate-950 border border-slate-700 p-2 rounded text-white outline-none focus:border-blue-500">
+                                                    <select value={selectedUser.talentTag || ''} onChange={e=>updateGlobalUser({...selectedUser, talentTag: e.target.value})} className="w-full bg-slate-950 border border-slate-700 p-2.5 rounded text-white outline-none">
                                                         <option value="">-- 无特殊标签 --</option>
                                                         <option value="主子背">主子背</option>
                                                         <option value="核心骨干">核心骨干</option>
                                                         <option value="高潜">高潜</option>
                                                         <option value="执行">执行</option>
-                                                        <option value="待离职">待离职 (将呈现删除线)</option>
+                                                        <option value="待离职">待离职 (显示删除线)</option>
                                                     </select>
                                                 </div>
 
-                                                <div><label className="block text-[10px] text-slate-500 mb-1 text-blue-400">入职日期 (重算司龄)</label><input type="date" value={selectedUser.entryDate} onChange={e=>setSelectedUser({...selectedUser, entryDate: e.target.value})} className="w-full bg-blue-950/20 border border-blue-900/50 p-2 rounded text-blue-200 outline-none focus:border-blue-500" /></div>
-                                                <div><label className="block text-[10px] text-slate-500 mb-1">薪资水平</label><input type="text" value={selectedUser.salary || ''} onChange={e=>setSelectedUser({...selectedUser, salary: e.target.value})} className="w-full bg-slate-950 border border-slate-700 p-2 rounded text-emerald-400 font-mono outline-none" /></div>
-                                                <div><label className="block text-[10px] text-slate-500 mb-1">最高学历</label><select value={selectedUser.education || '本科'} onChange={e=>setSelectedUser({...selectedUser, education: e.target.value})} className="w-full bg-slate-950 border border-slate-700 p-2 rounded text-white outline-none"><option value="大专">大专</option><option value="本科">本科</option><option value="硕士">硕士</option><option value="博士">博士</option></select></div>
-                                                <div className="col-span-2"><label className="block text-[10px] text-slate-500 mb-1">毕业院校</label><input type="text" value={selectedUser.school || ''} onChange={e=>setSelectedUser({...selectedUser, school: e.target.value})} className="w-full bg-slate-950 border border-slate-700 p-2 rounded text-white outline-none focus:border-blue-500" /></div>
+                                                <div><label className="block text-[10px] text-slate-500 mb-1">入职日期</label><input type="date" value={selectedUser.entryDate} onChange={e=>updateGlobalUser({...selectedUser, entryDate: e.target.value})} className="w-full bg-slate-950 border border-slate-700 p-2.5 rounded text-white outline-none" /></div>
+                                                <div><label className="block text-[10px] text-slate-500 mb-1">薪资水平</label><input type="text" value={selectedUser.salary || ''} onChange={e=>updateGlobalUser({...selectedUser, salary: e.target.value})} className="w-full bg-slate-950 border border-slate-700 p-2.5 rounded text-emerald-400 font-mono outline-none" /></div>
+                                                
+                                                <div><label className="block text-[10px] text-slate-500 mb-1">最高学历</label><select value={selectedUser.education || '本科'} onChange={e=>updateGlobalUser({...selectedUser, education: e.target.value})} className="w-full bg-slate-950 border border-slate-700 p-2.5 rounded text-white outline-none"><option value="大专">大专</option><option value="本科">本科</option><option value="硕士">硕士</option><option value="博士">博士</option></select></div>
+                                                <div className="col-span-2"><label className="block text-[10px] text-slate-500 mb-1">毕业院校</label><input type="text" value={selectedUser.school || ''} onChange={e=>updateGlobalUser({...selectedUser, school: e.target.value})} className="w-full bg-slate-950 border border-slate-700 p-2.5 rounded text-white outline-none" /></div>
                                             </div>
                                         ) : (
                                             <div className="grid grid-cols-3 gap-y-5 gap-x-4 text-sm">
@@ -1049,8 +967,8 @@
                                                     const dynamicDetails = calculateEmploymentDetails(selectedUser.entryDate, selectedUser.type);
                                                     return (
                                                         <>
-                                                            <div><div className="text-slate-500 text-[10px] mb-1.5 uppercase font-medium">用工阶段状态</div><div>{getStatusBadge(dynamicDetails.status)}</div></div>
-                                                            <div><div className="text-slate-500 text-[10px] mb-1.5 uppercase font-medium">入职日期 & 司龄</div><div className="text-slate-200 font-medium">{selectedUser.entryDate || '未知'} <span className="text-xs text-blue-400 font-normal ml-1 bg-blue-950/30 px-1 rounded">({dynamicDetails.duration})</span></div></div>
+                                                            <div><div className="text-slate-500 text-[10px] mb-1.5 uppercase font-medium">状态 / 阶段</div><div>{getStatusBadge(dynamicDetails.status)}</div></div>
+                                                            <div><div className="text-slate-500 text-[10px] mb-1.5 uppercase font-medium">入职日 / 司龄</div><div className="text-slate-200 font-medium">{selectedUser.entryDate || '未知'} <span className="text-xs text-blue-400 font-normal ml-1 bg-blue-950/30 px-1 rounded">({dynamicDetails.duration})</span></div></div>
                                                         </>
                                                     );
                                                 })()}
@@ -1062,23 +980,23 @@
                                         )}
                                     </div>
 
-                                    {/* 模块2 */}
+                                    {/* 模块2: AI 面试与背景画像 */}
                                     <div className="bg-slate-900 rounded-xl border border-slate-700 shadow-inner overflow-hidden">
                                         <div className="p-4 border-b border-slate-800 bg-slate-800/40 flex justify-between items-center">
                                             <h3 className="text-[11px] font-bold text-blue-400 uppercase tracking-widest flex items-center gap-2"><Sparkles className="w-4 h-4"/> 2. AI 面试与背景画像溯源</h3>
                                             <label className="flex items-center gap-1.5 bg-blue-900/30 hover:bg-blue-800/50 text-blue-300 border border-blue-700/50 px-3 py-1.5 rounded cursor-pointer transition-colors text-xs font-medium">
                                                 {isParsingFile ? <Loader2 className="w-3.5 h-3.5 animate-spin"/> : <UploadCloud className="w-3.5 h-3.5"/>}
-                                                {isParsingFile ? "解析中..." : "上传报告/简历"}
+                                                {isParsingFile ? "解析中..." : "上传评估报告"}
                                                 <input type="file" className="hidden" accept=".doc,.docx,.pdf,.txt,.html,.md" onChange={handleFileForDrawer} />
                                             </label>
                                         </div>
                                         <div className="p-5">
                                             {!selectedUser.aiProfile ? (
                                                 <div className="space-y-4">
-                                                    <p className="text-xs text-slate-400">您可以直接粘贴历史记录，或使用右上角上传该员工的《面试评估报告》，AI 将自动提取基础底盘模型。</p>
+                                                    <p className="text-xs text-slate-400">您可以直接粘贴历史记录，或使用右上角上传该员工的《面试评估报告》，AI 将自动提取该员工的冰山底盘模型。</p>
                                                     <textarea value={aiInputText} onChange={(e) => setAiInputText(e.target.value)} placeholder="在此粘贴评估报告内容、文本，或直接上传文档..." className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-xs text-slate-300 outline-none focus:border-blue-500 h-28 resize-none"/>
                                                     <button onClick={handleGenerateAIProfile} disabled={isAiGenerating || !aiInputText.trim()} className="flex items-center justify-center gap-2 bg-blue-600/20 text-blue-400 border border-blue-500/50 hover:bg-blue-600/40 px-4 py-2.5 rounded-lg w-full text-sm font-bold transition-all disabled:opacity-50">
-                                                        {isAiGenerating ? <Loader2 className="w-4 h-4 animate-spin"/> : <BrainCircuit className="w-4 h-4"/>} {isAiGenerating ? "大模型深度解析与特征构建中..." : "生成结构化人才画像"}
+                                                        {isAiGenerating ? <Loader2 className="w-4 h-4 animate-spin"/> : <BrainCircuit className="w-4 h-4"/>} {isAiGenerating ? "生成中..." : "提取结构化人才画像"}
                                                     </button>
                                                 </div>
                                             ) : (
@@ -1102,7 +1020,7 @@
                                         </div>
                                     </div>
 
-                                    {/* 模块3 */}
+                                    {/* 模块3: 绑定考核量化包 */}
                                     <div className="bg-indigo-950/20 rounded-xl border border-indigo-500/30 p-5">
                                         <h3 className="text-[11px] font-bold text-indigo-400 mb-4 uppercase tracking-widest">3. 绑定岗位考核量化包</h3>
                                         <div className="relative">
@@ -1114,7 +1032,7 @@
                                         </div>
                                     </div>
 
-                                    {/* 模块4 */}
+                                    {/* 模块4: 事实细节录入与打分结算 */}
                                     <div className="bg-slate-900 rounded-xl border border-slate-700 shadow-inner overflow-hidden">
                                         <div className="p-4 border-b border-slate-800 bg-slate-800/40"><h3 className="text-[11px] font-bold text-slate-300 uppercase tracking-widest">4. 事实细节录入与打分结算</h3></div>
                                         <div className="p-5 space-y-5">
@@ -1153,7 +1071,7 @@
                                         </div>
                                     </div>
 
-                                    {/* 模块5 */}
+                                    {/* 模块5: 在岗台账历史 */}
                                     <div>
                                         <h3 className="text-[11px] font-bold text-slate-500 mb-5 uppercase tracking-widest">5. 在岗台账历史</h3>
                                         <div className="space-y-4 relative before:absolute before:inset-0 before:ml-[11px] before:h-full before:w-px before:bg-slate-700/50">
@@ -1172,18 +1090,61 @@
                                             )}
                                         </div>
                                     </div>
+
                                 </div>
                             </div>
                         </>
                     )}
 
-                    {/* 全局弹窗: 设置与离职 */}
+                    {/* === 待招 HC 设定弹窗 === */}
+                    {showAddHcModal && (
+                        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[90] flex items-center justify-center p-4">
+                            <div className="bg-slate-900 border border-blue-900/40 rounded-2xl w-full max-w-sm p-6">
+                                <div className="flex justify-between items-center mb-6">
+                                    <h3 className="font-bold text-white flex items-center gap-2"><UserPlus className="w-5 h-5 text-blue-400"/> 新增待招 HC</h3>
+                                    <button onClick={() => setShowAddHcModal(false)} className="text-slate-400 hover:text-white"><X className="w-4 h-4"/></button>
+                                </div>
+                                <div className="space-y-4">
+                                    <div><label className="text-xs text-slate-400 mb-1 block">岗位名称 (自动继承组名可改)</label><input type="text" value={hcData.name} onChange={e=>setHcData({...hcData, name:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded p-2.5 text-sm text-white outline-none focus:border-blue-500" /></div>
+                                    <div>
+                                        <label className="text-xs text-slate-400 mb-1 block">岗位级别</label>
+                                        <select value={hcData.level} onChange={e=>setHcData({...hcData, level:e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded p-2.5 text-sm text-white outline-none focus:border-blue-500">
+                                            {['P0','P1','P2','P3','M1','M2'].map(lvl => <option key={lvl} value={lvl}>{lvl}</option>)}
+                                        </select>
+                                    </div>
+                                    <button onClick={handleAddHcSubmit} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 rounded-lg text-sm mt-2">确认锁定编制</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    
+                    {/* === 新增实体员工弹窗 === */}
+                    {showAddEmpModal && (
+                        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[90] flex items-center justify-center p-4">
+                            <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-sm p-6 shadow-2xl">
+                                <div className="flex justify-between items-center mb-6">
+                                    <h3 className="font-bold text-white flex items-center gap-2"><UserCircle2 className="w-5 h-5 text-slate-400"/> 新增入职建档</h3>
+                                    <button onClick={() => setShowAddEmpModal(false)} className="text-slate-400 hover:text-white"><X className="w-4 h-4"/></button>
+                                </div>
+                                <div className="space-y-4">
+                                    <p className="text-xs text-slate-400">系统已接通 AI 引擎。上传简历或面试文本可自动解析姓名等所有信息，并归入 <strong>{addTarget?.groupTitle}</strong> 组。</p>
+                                    <label className="cursor-pointer bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 w-full py-3 rounded-lg text-sm font-bold shadow-md transition-all flex justify-center items-center gap-2">
+                                        {isParsingFile ? <Loader2 className="w-4 h-4 animate-spin"/> : <UploadCloud className="w-4 h-4"/>} 
+                                        上传文本并智能建档
+                                        <input type="file" className="hidden" accept=".txt,.html,.doc,.docx,.pdf" onChange={handleAiAddEmployee} ref={addEmpFileRef} />
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    
+                    {/* === 全局系统配置弹窗 === */}
                     {showSettingsModal && (
                         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[80] flex items-center justify-center p-4">
                             <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl">
                                 <div className="p-5 border-b border-slate-800 flex justify-between items-center bg-slate-800/40">
-                                    <h2 className="text-lg font-bold text-white flex items-center gap-2"><Settings className="w-5 h-5"/> 系统设置与模版库</h2>
-                                    <button onClick={() => { setShowSettingsModal(false); setIsCreatingTpl(false); }} className="text-slate-400 hover:text-white"><X className="w-5 h-5"/></button>
+                                    <h2 className="text-lg font-bold text-white flex items-center gap-2"><FileCog className="w-5 h-5"/> 系统设置与配置库</h2>
+                                    <button onClick={() => setShowSettingsModal(false)} className="text-slate-400 hover:text-white"><X className="w-5 h-5"/></button>
                                 </div>
                                 <div className="p-6 overflow-y-auto flex-1 custom-scrollbar space-y-8">
                                     <div className="bg-[#0B1120] border border-blue-900/50 rounded-xl p-5 shadow-inner relative">
@@ -1199,47 +1160,8 @@
                                             </div>
                                             <p className="text-[10px] text-slate-500 border-l-2 border-slate-700 pl-2">您的密钥仅加密存储在本地浏览器的 localStorage 中，退出后不会泄露，请放心使用。</p>
                                         </div>
-                                        <button onClick={handleResetData} className="absolute top-4 right-4 flex items-center gap-1.5 text-[10px] bg-red-950/40 hover:bg-red-900/60 text-red-400 border border-red-900/50 px-2 py-1.5 rounded transition-all"><RotateCcw className="w-3 h-3"/> 恢复出厂设置并清空缓存</button>
                                     </div>
-                                    <div>
-                                        {!isCreatingTpl ? (
-                                            <>
-                                                <div className="flex justify-between items-center mb-4"><h3 className="text-sm font-bold text-slate-300 flex items-center gap-2"><FileCog className="w-4 h-4"/> 岗位考核大类模版库</h3><button onClick={() => setIsCreatingTpl(true)} className="flex items-center gap-1 text-xs bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 px-3 py-1.5 rounded border border-blue-500/50"><Plus className="w-3 h-3"/> 新增考核大类</button></div>
-                                                <div className="grid grid-cols-2 gap-4">
-                                                    {scoringTemplates.map(tpl => (
-                                                        <div key={tpl.id} className="bg-slate-950 border border-slate-800 rounded-lg p-4 group relative hover:border-blue-500/30 transition-all">
-                                                            <div className="font-bold text-slate-200 text-sm mb-1">{tpl.name}</div>
-                                                            <div className="text-xs text-slate-500">内含 <strong className="text-blue-400">{tpl.rules.length}</strong> 项打分细则</div>
-                                                            <button onClick={() => handleDeleteTemplate(tpl.id)} className="absolute top-3 right-3 text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="w-4 h-4"/></button>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </>
-                                        ) : (
-                                            <div className="space-y-4 bg-slate-900 border border-blue-900/40 p-5 rounded-xl animate-in fade-in">
-                                                <div className="flex justify-between items-center border-b border-slate-800 pb-2"><h3 className="text-sm font-bold text-blue-400">创建新考核大类</h3><button onClick={() => setIsCreatingTpl(false)} className="text-xs text-slate-500">返回</button></div>
-                                                <div><label className="text-xs text-slate-400 mb-1 block">大类名称 *</label><input type="text" value={newTplName} onChange={(e) => setNewTplName(e.target.value)} placeholder="如：系统策划考核标准" className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-sm outline-none focus:border-blue-500" /></div>
-                                                <div className="space-y-3"><label className="text-xs text-slate-400 block">预设扣分/加分细则 (至少1条) *</label><div className="flex gap-2"><input type="text" value={draftRuleName} onChange={(e) => setDraftRuleName(e.target.value)} placeholder="规则描述 (如: 进度延期)" className="flex-1 bg-slate-950 border border-slate-700 rounded p-2 text-xs outline-none" /><input type="number" value={draftRulePenalty} onChange={(e) => setDraftRulePenalty(e.target.value)} placeholder="分值 (如: -10)" className="w-24 bg-slate-950 border border-slate-700 rounded p-2 text-xs outline-none" /><button onClick={handleAddDraftRule} className="bg-slate-800 hover:bg-slate-700 px-3 rounded text-xs border border-slate-700">添加</button></div>
-                                                    {newTplRules.length > 0 && <div className="mt-3 space-y-1">{newTplRules.map((r, i) => (<div key={i} className="flex justify-between items-center bg-slate-950 p-2 rounded text-xs border border-slate-800"><span className="text-slate-300">{r.name}</span><span className={`font-mono font-bold ${r.penalty < 0 ? 'text-red-400' : 'text-green-400'}`}>{r.penalty > 0 ? '+' : ''}{r.penalty}</span></div>))}</div>}
-                                                </div>
-                                                <button onClick={handleSaveNewTemplate} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 rounded-lg text-sm mt-2">保存大类</button>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {showResignModal && selectedUser && (
-                        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[70] flex items-center justify-center">
-                            <div className="bg-slate-900 border border-red-900/50 rounded-2xl w-[450px] p-6">
-                                <h2 className="text-xl font-bold text-red-400 mb-2 flex items-center gap-2"><UserMinus className="w-5 h-5"/> 办理离职</h2>
-                                <p className="text-sm text-slate-400 mb-5">当前办理 <strong>{selectedUser.name}</strong> 的流失登记。</p>
-                                <textarea value={resignReason} onChange={(e) => setResignReason(e.target.value)} placeholder="必填：记录流失的详细原因..." className="w-full bg-red-950/20 border border-red-900/40 rounded p-3 text-sm text-red-100 outline-none h-28 resize-none" />
-                                <div className="flex justify-end gap-3 mt-6">
-                                    <button onClick={() => setShowResignModal(false)} className="px-4 py-2 text-sm text-slate-400">取消</button>
-                                    <button onClick={handleConfirmResign} className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm rounded font-bold">确认归档</button>
+                                    <button onClick={handleResetData} className="flex items-center gap-1.5 text-[10px] bg-red-950/40 hover:bg-red-900/60 text-red-400 border border-red-900/50 px-3 py-2 rounded transition-all"><RotateCcw className="w-3 h-3"/> 恢复出厂设置并清空所有缓存数据</button>
                                 </div>
                             </div>
                         </div>
