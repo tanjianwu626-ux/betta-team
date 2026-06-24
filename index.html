@@ -42,12 +42,9 @@
             Briefcase, Calendar, FileCog, Sparkles, Loader2, UploadCloud, 
             ShieldAlert, AlertTriangle, X, Edit2, Save, UserMinus, SearchX, 
             ChevronDown, BrainCircuit, Key, TrendingUp, Target, Plus, Trash2,
-            Activity, PieChart, LineChart, Settings, Users, UserPlus, DownloadCloud, FileSpreadsheet
+            Activity, PieChart, LineChart, Settings, Users, UserPlus, DownloadCloud, FileSpreadsheet, RotateCcw, GraduationCap
         } from 'lucide-react';
 
-        // ============================================================================
-        // 1. 基础配置与系统锚点
-        // ============================================================================
         const CURRENT_DATE = new Date('2026-06-18');
 
         const calculateEmploymentDetails = (entryDateStr, baseType) => {
@@ -55,29 +52,43 @@
             const entryDate = new Date(entryDateStr);
             if (isNaN(entryDate)) return { status: baseType || '未知', duration: '未知' };
 
-            const diffMonths = Math.abs(CURRENT_DATE - entryDate) / (1000 * 60 * 60 * 24 * 30);
+            const diffTime = CURRENT_DATE - entryDate;
+            const diffMonths = diffTime / (1000 * 60 * 60 * 24 * 30);
             
-            let duration = diffMonths < 1 ? `${Math.ceil(diffMonths * 30)}天` : `${Math.floor(diffMonths)}个月`;
+            let duration = diffMonths < 1 && diffTime >= 0 ? `${Math.ceil(diffMonths * 30)}天` : `${Math.floor(diffMonths)}个月`;
             if (diffMonths >= 12) duration = `${(diffMonths / 12).toFixed(1)}年`;
+            if (diffTime < 0) duration = '未入职';
 
             let status = baseType;
-            if (baseType === '正式员工' || baseType === '试用期' || baseType === '正式') {
-                if (diffMonths <= 3) status = '试用一期';
+
+            // 智能与手动双轨制判断
+            if (baseType === '正式员工') {
+                if (diffTime < 0) status = '正式员工（待入职）';
+                else if (diffMonths <= 3) status = '试用一期';
                 else if (diffMonths <= 6) status = '试用二期';
                 else status = '正式';
-            } else if (baseType && baseType.includes('实习')) {
-                status = '实习';
+            } else if (baseType === '实习生') {
+                if (diffTime < 0) status = '实习生（待入职）';
+                else status = '实习生';
+            } else if (baseType === '正式员工（已转正）' || baseType === '正式') {
+                status = '正式';
+            } else {
+                // 如果是用户强制选定的“试用一期”、“试用二期”、“待入职”、“外派”，则优先尊重手工指令
+                status = baseType;
             }
+            
             return { status, duration };
         };
 
-        // 🌟 修复关键：将 getStatusBadge 提升至全局，防止 ReferenceError 🌟
         const getStatusBadge = (status) => {
-            if (status === '正式') return <span className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded text-[10px]">正式员工</span>;
-            if (status === '试用一期') return <span className="bg-orange-500/20 text-orange-400 border border-orange-500/30 px-2 py-0.5 rounded text-[10px]">试用(一期)</span>;
-            if (status === '试用二期') return <span className="bg-amber-500/20 text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded text-[10px]">试用(二期)</span>;
-            if (status === '实习') return <span className="bg-sky-500/20 text-sky-400 border border-sky-500/30 px-2 py-0.5 rounded text-[10px]">实习生</span>;
-            return <span className="bg-slate-700 text-slate-300 px-2 py-0.5 rounded text-[10px]">{status || '未知'}</span>;
+            if (status === '正式') return <span className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-1.5 py-0.5 rounded text-[10px]">正式员工</span>;
+            if (status === '试用一期') return <span className="bg-orange-500/20 text-orange-400 border border-orange-500/30 px-1.5 py-0.5 rounded text-[10px]">试用(一期)</span>;
+            if (status === '试用二期') return <span className="bg-amber-500/20 text-amber-400 border border-amber-500/30 px-1.5 py-0.5 rounded text-[10px]">试用(二期)</span>;
+            if (status === '实习生（待入职）') return <span className="bg-slate-500/20 text-slate-400 border border-slate-500/50 px-1.5 py-0.5 rounded text-[10px] border-dashed">实习(待入职)</span>;
+            if (status === '正式员工（待入职）') return <span className="bg-slate-500/20 text-slate-400 border border-slate-500/50 px-1.5 py-0.5 rounded text-[10px] border-dashed">正式(待入职)</span>;
+            if (status === '实习' || status === '实习生') return <span className="bg-sky-500/20 text-sky-400 border border-sky-500/30 px-1.5 py-0.5 rounded text-[10px]">实习生</span>;
+            if (status === '外派') return <span className="bg-purple-500/20 text-purple-400 border border-purple-500/30 px-1.5 py-0.5 rounded text-[10px]">外派员工</span>;
+            return <span className="bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded text-[10px]">{status || '未知'}</span>;
         };
 
         const defaultScoringTemplates = [
@@ -99,72 +110,50 @@
                 ]
             },
             {
-                id: "tpl_sys_designer", name: "系统策划考核标准",
-                rules: [
-                    { id: "sd1", name: "案子逻辑漏洞致返工", penalty: -10, type: "negative", tags: ["逻辑不严密"] },
-                    { id: "sd3", name: "主动优化老旧系统", penalty: +5, type: "positive", tags: ["自驱力"] }
-                ]
-            },
-            {
                 id: "tpl_programmer", name: "程序研发考核标准",
                 rules: [
                     { id: "pg1", name: "引发线上严重Bug", penalty: -20, type: "negative", tags: ["严重事故"] },
                     { id: "pg3", name: "解决底层性能瓶颈", penalty: +10, type: "positive", tags: ["技术攻坚"] }
                 ]
-            },
-            {
-                id: "tpl_qa", name: "测试(QA)考核标准",
-                rules: [
-                    { id: "qa1", name: "发生严重漏测", penalty: -15, type: "negative", tags: ["漏测事故"] },
-                    { id: "qa3", name: "提前拦截致命崩溃", penalty: +10, type: "positive", tags: ["质量卫士"] }
-                ]
             }
         ];
 
-        // ============================================================================
-        // 2. 初始架构数据底座 (全量31人)
-        // ============================================================================
         const initialTeamArchitecture = {
             producer: { 
                 id: "p1", name: "任光谦", role: "制作人", type: "正式员工", entryDate: "2020-03-01",
-                score: 100, talentTag: "核心骨干", age: 34, school: "武汉大学", education: "本科", salary: "100000", dynamicTags: ["统筹全局"] 
+                score: 100, talentTag: "核心骨干", age: 34, school: "武汉大学", education: "本科", salary: "100000"
             },
             departments: [
                 {
                     id: "dept_design", name: "策划部", isSpanning: true,
-                    lead: { id: "c1", name: "陈冠兰", role: "主策划", type: "正式员工", entryDate: "2021-06-15", score: 100, talentTag: "核心骨干", age: 30, school: "华中科技大学", education: "本科", salary: "35000" },
+                    lead: { id: "c1", name: "陈冠兰", role: "主策划", type: "正式员工", entryDate: "2021-06-15", score: 100, talentTag: "主子背", age: 30, school: "华中科技大学", education: "本科", salary: "35000" },
                     branches: [
                         { title: "系统策划", members: [
                             { id: "c2", name: "朱琰", role: "系统策划", type: "正式员工", entryDate: "2023-05-10", score: 100, age: 26, school: "中南民族大学", education: "本科", salary: "18000" },
-                            { id: "c3", name: "杨帆", role: "系统策划", type: "正式员工", entryDate: "2024-11-01", score: 100, age: 28, school: "未知", education: "大专", salary: "16000" },
-                            { id: "c4", name: "王琳轲", role: "系统策划(待入职)", type: "待入职", entryDate: "2026-07-01", score: 100, age: 24, school: "未知", education: "本科", salary: "15000", talentTag: "待入职" }
+                            { id: "c3", name: "杨帆", role: "系统策划", type: "正式员工", entryDate: "2024-11-01", score: 100, age: 28, school: "未知", education: "大专", salary: "16000", talentTag: "执行" },
+                            { id: "c4", name: "王琳轲", role: "系统策划(待入职)", type: "正式员工（待入职）", entryDate: "2026-07-01", score: 100, age: 24, school: "未知", education: "本科", salary: "15000" }
                         ]},
                         { title: "数值策划", members: [
-                            { id: "c8", name: "蔡玉林", role: "数值策划", type: "正式员工", entryDate: "2023-08-20", score: 100, age: 27, school: "哈尔滨工业大学", education: "硕士", salary: "28000", talentTag: "重点高潜" }
+                            { id: "c8", name: "蔡玉林", role: "数值策划", type: "正式员工", entryDate: "2023-08-20", score: 100, age: 27, school: "哈尔滨工业大学", education: "硕士", salary: "28000", talentTag: "高潜" }
                         ]},
                         { title: "活动策划", members: [
                             { id: "c6", name: "李青玉", role: "活动策划", type: "正式员工", entryDate: "2025-02-14", score: 100, age: 25, school: "北京林业大学", education: "本科", salary: "14000" },
                             { id: "c7", name: "刘子康", role: "活动策划(待离职)", type: "正式员工", entryDate: "2024-05-10", score: 55, age: 26, school: "未知", education: "本科", salary: "15000", talentTag: "待离职" }
                         ]},
                         { title: "关卡策划", members: [
-                            { id: "c9", name: "王昶越", role: "关卡组长", type: "正式员工", entryDate: "2022-04-10", score: 100, age: 29, school: "武汉理工大学", education: "本科", salary: "25000" },
-                            { id: "c10", name: "徐皓翔", role: "关卡策划", type: "正式员工", entryDate: "2024-07-15", score: 85, age: 25, school: "未知", education: "本科", salary: "15000" },
+                            { id: "c9", name: "王昶越", role: "关卡组长", type: "正式员工", entryDate: "2022-04-10", score: 100, age: 29, school: "武汉理工大学", education: "本科", salary: "25000", talentTag: "核心骨干" },
                             { id: "c11", name: "吴彧斐", role: "关卡实习生", type: "实习生", entryDate: "2026-06-01", score: 75, age: 22, school: "湖北大学", education: "本科", salary: "4000" },
-                            { id: "c12", name: "张文欣", role: "关卡策划", type: "正式员工", entryDate: "2023-11-20", score: 100, age: 26, school: "未知", education: "本科", salary: "16000" },
-                            { id: "c13", name: "陈天宇", role: "关卡实习生", type: "实习生", entryDate: "2026-05-15", score: 100, age: 23, school: "未知", education: "本科", salary: "4000" },
-                            { id: "c14", name: "吕妍妍", role: "关卡实习生", type: "实习生", entryDate: "2026-06-10", score: 100, age: 22, school: "中南财经政法大学", education: "本科", salary: "4000" }
+                            { id: "c12", name: "张文欣", role: "关卡策划", type: "正式员工", entryDate: "2023-11-20", score: 100, age: 26, school: "未知", education: "本科", salary: "16000" }
                         ]}
                     ]
                 },
                 {
                     id: "dept_tech", name: "程序部", isSpanning: false,
-                    lead: { id: "t1", name: "戴佳文", role: "客户端主程", type: "正式员工", entryDate: "2022-01-05", score: 100, age: 32, school: "电子科技大学", education: "本科", salary: "40000" },
+                    lead: { id: "t1", name: "戴佳文", role: "客户端主程", type: "正式员工", entryDate: "2022-01-05", score: 100, age: 32, school: "电子科技大学", education: "本科", salary: "40000", talentTag: "主子背" },
                     roles: [
                         { title: "客户端开发", members: [
                             { id: "t2", name: "刘澎", role: "客户端开发", type: "正式员工", entryDate: "2024-03-10", score: 65, age: 31, school: "中北大学", education: "本科", salary: "29000" },
-                            { id: "t3", name: "白冰", role: "客户端开发", type: "正式员工", entryDate: "2025-10-15", score: 100, age: 29, school: "景德镇陶瓷大学", education: "本科", salary: "25000" },
-                            { id: "t4", name: "石泽堃", role: "客户端开发", type: "正式员工", entryDate: "2023-07-01", score: 100, age: 28, school: "未知", education: "本科", salary: "24000" },
-                            { id: "t5", name: "薛保平", role: "客户端开发", type: "正式员工", entryDate: "2024-02-18", score: 100, age: 30, school: "未知", education: "本科", salary: "26000" }
+                            { id: "t3", name: "白冰", role: "客户端开发", type: "正式员工", entryDate: "2025-10-15", score: 100, age: 29, school: "景德镇陶瓷大学", education: "本科", salary: "25000", talentTag: "执行" }
                         ]}
                     ]
                 },
@@ -174,73 +163,36 @@
                     roles: [
                         { title: "测试执行", members: [
                             { id: "q2", name: "牟书含", role: "测试工程师", type: "正式员工", entryDate: "2024-08-10", score: 100, age: 26, school: "未知", education: "本科", salary: "15000" },
-                            { id: "q3", name: "李松岩", role: "测试工程师", type: "正式员工", entryDate: "2025-03-20", score: 100, age: 27, school: "未知", education: "本科", salary: "14500" },
-                            { id: "q4", name: "张鑫晨", role: "测试实习生", type: "实习生", entryDate: "2026-05-01", score: 100, age: 22, school: "未知", education: "本科", salary: "3000" }
-                        ]}
-                    ]
-                },
-                {
-                    id: "dept_art", name: "美术部", isSpanning: false,
-                    lead: { id: "a1", isVacant: true, role: "主美 (待招)" },
-                    roles: [
-                        { title: "原画", members: [
-                            { id: "a4", name: "张蕴秀", role: "原画师", type: "正式员工", entryDate: "2023-02-15", score: 100, age: 27, school: "湖北美术学院", education: "本科", salary: "18000" }
-                        ]},
-                        { title: "动效", members: [
-                            { id: "a2", name: "孙伟轩", role: "动效设计师", type: "正式员工", entryDate: "2022-11-10", score: 100, age: 29, school: "未知", education: "本科", salary: "22000" },
-                            { id: "a3", name: "韩博", role: "外派动效", type: "正式员工", entryDate: "2024-01-05", score: 100, age: 28, school: "未知", education: "本科", salary: "20000", talentTag: "外派" }
-                        ]}
-                    ]
-                },
-                {
-                    id: "dept_market", name: "市场部", isSpanning: false,
-                    lead: null,
-                    roles: [
-                        { title: "视频与买量", members: [
-                            { id: "m1", name: "任博伟", role: "视频设计师", type: "正式员工", entryDate: "2023-06-20", score: 100, age: 28, school: "未知", education: "本科", salary: "21000" },
-                            { id: "m2", name: "杨靖雯", role: "视频设计师", type: "正式员工", entryDate: "2025-04-12", score: 100, age: 25, school: "未知", education: "本科", salary: "16000" }
-                        ]},
-                        { title: "投放", members: [
-                            { id: "m4", name: "张卓良", role: "投放优化师", type: "正式员工", entryDate: "2024-09-01", score: 100, age: 27, school: "未知", education: "本科", salary: "23000" }
-                        ]},
-                        { title: "运营", members: [
-                            { id: "m6", name: "邢昊阳", role: "游戏运营", type: "正式员工", entryDate: "2023-03-15", score: 100, age: 26, school: "未知", education: "本科", salary: "18000" }
+                            { id: "q4", name: "张鑫晨", role: "测试实习生", type: "实习生（待入职）", entryDate: "2026-05-01", score: 100, age: 22, school: "南京邮电大学", education: "硕士", salary: "3000" }
                         ]}
                     ]
                 }
             ]
         };
 
-        const parseAIResponse = (text) => {
-            try {
-                let cleanText = text.replace(/```json/gi, '').replace(/```/g, '').trim();
-                const firstBrace = cleanText.indexOf('{');
-                const lastBrace = cleanText.lastIndexOf('}');
-                if (firstBrace !== -1 && lastBrace !== -1) {
-                    cleanText = cleanText.substring(firstBrace, lastBrace + 1);
-                }
-                return JSON.parse(cleanText);
-            } catch (e) {
-                console.error("JSON解析失败:", text);
-                throw new Error("解析AI返回数据失败，请重试或更换模型。");
-            }
-        };
-
-        // ============================================================================
-        // 3. 主应用程序
-        // ============================================================================
         function App() {
-            // 顶层导航与大盘数据
             const [activeTab, setActiveTab] = useState('kanban'); 
-            const [data, setData] = useState(initialTeamArchitecture);
-            const [resignedStaff, setResignedStaff] = useState([]); 
-            const [scoringTemplates, setScoringTemplates] = useState(defaultScoringTemplates);
+            
+            const [data, setData] = useState(() => {
+                const saved = localStorage.getItem('beta_team_data');
+                return saved ? JSON.parse(saved) : initialTeamArchitecture;
+            });
+            const [resignedStaff, setResignedStaff] = useState(() => {
+                const saved = localStorage.getItem('beta_resigned_staff');
+                return saved ? JSON.parse(saved) : [];
+            });
+            const [scoringTemplates, setScoringTemplates] = useState(() => {
+                const saved = localStorage.getItem('beta_scoring_tpl');
+                return saved ? JSON.parse(saved) : defaultScoringTemplates;
+            });
 
-            // API 配置状态
+            useEffect(() => { localStorage.setItem('beta_team_data', JSON.stringify(data)); }, [data]);
+            useEffect(() => { localStorage.setItem('beta_resigned_staff', JSON.stringify(resignedStaff)); }, [resignedStaff]);
+            useEffect(() => { localStorage.setItem('beta_scoring_tpl', JSON.stringify(scoringTemplates)); }, [scoringTemplates]);
+
             const [sfApiKey, setSfApiKey] = useState(localStorage.getItem('sf_api_key') || "");
             const [sfModel, setSfModel] = useState(localStorage.getItem('sf_model') || "deepseek-ai/DeepSeek-V3");
 
-            // UI 弹窗控制
             const [selectedUser, setSelectedUser] = useState(null);
             const [isDrawerOpen, setIsDrawerOpen] = useState(false);
             const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -248,44 +200,40 @@
             const [showResignModal, setShowResignModal] = useState(false);
             const [resignReason, setResignReason] = useState("");
 
-            // 新增员工弹窗控制
             const [showAddEmpModal, setShowAddEmpModal] = useState(false);
             const [addEmpTarget, setAddEmpTarget] = useState(null); 
             const addEmpFileRef = useRef(null);
             const syncExcelRef = useRef(null);
+            const importResignRef = useRef(null);
 
-            // 打分面板状态
             const [observation, setObservation] = useState("");
             const [selectedRule, setSelectedRule] = useState(null);
             const [scoreMode, setScoreMode] = useState('rule'); 
             const [manualScoreChange, setManualScoreChange] = useState(""); 
 
-            // AI 交互状态
             const [aiInputText, setAiInputText] = useState("");
             const [isAiGenerating, setIsAiGenerating] = useState(false);
             const [isParsingFile, setIsParsingFile] = useState(false);
             const [isSyncingExcel, setIsSyncingExcel] = useState(false);
+            const [isImportingResigned, setIsImportingResigned] = useState(false);
             
-            // 策略中枢状态
             const [strategyInput, setStrategyInput] = useState("");
             const [strategyReport, setStrategyReport] = useState(null);
             const [isStrategyLoading, setIsStrategyLoading] = useState(false);
 
-            // 模板创建状态
             const [isCreatingTpl, setIsCreatingTpl] = useState(false);
             const [newTplName, setNewTplName] = useState("");
             const [newTplRules, setNewTplRules] = useState([]);
             const [draftRuleName, setDraftRuleName] = useState("");
             const [draftRulePenalty, setDraftRulePenalty] = useState("");
 
-            // 拖拽相关 Refs
             const dragRef = useRef(null);
 
             const getTeamMetrics = () => {
                 let totalMonthlyCost = 0; let riskCount = 0; let headcount = 0;
                 let validScoreCount = 0; let totalScore = 0;
                 const processUser = (user) => {
-                    if (user.isVacant || user.talentTag === '待入职') return;
+                    if (user.isVacant || (user.type && user.type.includes('待入职'))) return;
                     headcount++;
                     if (user.score !== undefined) {
                         totalScore += Number(user.score); validScoreCount++;
@@ -303,6 +251,21 @@
                     if(dept.branches) dept.branches.forEach(b => b.members.forEach(processUser));
                 });
                 return { headcount, avgScore: validScoreCount ? (totalScore/validScoreCount).toFixed(1) : 0, totalMonthlyCost: totalMonthlyCost.toLocaleString(), riskCount };
+            };
+
+            const parseAIResponse = (text) => {
+                try {
+                    let cleanText = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+                    const firstBrace = cleanText.indexOf('{');
+                    const lastBrace = cleanText.lastIndexOf('}');
+                    if (firstBrace !== -1 && lastBrace !== -1) {
+                        cleanText = cleanText.substring(firstBrace, lastBrace + 1);
+                    }
+                    return JSON.parse(cleanText);
+                } catch (e) {
+                    console.error("JSON解析失败:", text);
+                    throw new Error("解析AI返回数据失败，请重试或更换模型。");
+                }
             };
 
             const fetchSiliconFlowAPI = async (systemPrompt, userPrompt) => {
@@ -334,7 +297,6 @@
                 setData(newData);
             };
 
-            // ========== SheetJS 智能同步花名册模块 ==========
             const handleSyncRoster = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
@@ -347,15 +309,12 @@
                         const workbook = window.XLSX.read(buffer, {type: 'array'});
                         const firstSheetName = workbook.SheetNames[0];
                         const worksheet = workbook.Sheets[firstSheetName];
-                        // 强制将日期按文本解析，防止时区和序列号问题
                         const jsonRaw = window.XLSX.utils.sheet_to_json(worksheet, {raw: false});
                         
-                        let newData = JSON.parse(JSON.stringify(data)); // 深拷贝大盘
-                        let updatedCount = 0;
-                        let newCount = 0;
+                        let newData = JSON.parse(JSON.stringify(data)); 
+                        let updatedCount = 0; let newCount = 0;
 
                         jsonRaw.forEach(row => {
-                            // 智能嗅探表头字段（模糊匹配）
                             const nameKey = Object.keys(row).find(k => k.includes('姓名') || k.includes('名字'));
                             const roleKey = Object.keys(row).find(k => k.includes('岗位') || k.includes('职位'));
                             const dateKey = Object.keys(row).find(k => k.includes('入职'));
@@ -364,12 +323,10 @@
                             const eduKey = Object.keys(row).find(k => k.includes('学历'));
                             const schoolKey = Object.keys(row).find(k => k.includes('学校') || k.includes('院校'));
                             
-                            if (!nameKey || !row[nameKey]) return; // 空行跳过
-                            
+                            if (!nameKey || !row[nameKey]) return; 
                             const empName = row[nameKey].toString().trim();
                             let found = false;
 
-                            // 覆盖更新现有员工信息
                             const updateEmp = (emp) => {
                                 if (emp.name === empName) {
                                     found = true;
@@ -383,7 +340,6 @@
                                 }
                             };
 
-                            // 全局递归寻找
                             if (newData.producer.name === empName) updateEmp(newData.producer);
                             newData.departments.forEach(dept => {
                                 if (dept.lead && dept.lead.name === empName) updateEmp(dept.lead);
@@ -391,7 +347,6 @@
                                 else dept.roles.forEach(r => r.members.forEach(updateEmp));
                             });
 
-                            // 如果没找到，判定为新员工，执行智能分流入列
                             if (!found) {
                                 newCount++;
                                 const assignedRole = roleKey ? row[roleKey].toString().trim() : '未知岗位';
@@ -405,34 +360,24 @@
                                     education: eduKey ? row[eduKey].toString().trim() : '未知',
                                     school: schoolKey ? row[schoolKey].toString().trim() : '未知',
                                     score: 100,
-                                    talentTag: '新入职(自动导入)'
+                                    talentTag: ''
                                 };
-
-                                // 智能嗅探该去哪个部门 (通过前两字匹配)
                                 let isAssigned = false;
                                 newData.departments.forEach(dept => {
                                     if (!isAssigned && (dept.name.includes(assignedRole.substring(0,2)) || assignedRole.includes(dept.name.substring(0,2)))) {
-                                        // 匹配成功，直接塞进该部门的第一个列表下供人工后续调整
                                         if (dept.isSpanning && dept.branches.length > 0) { dept.branches[0].members.push(newEmp); isAssigned = true; }
                                         else if (!dept.isSpanning && dept.roles.length > 0) { dept.roles[0].members.push(newEmp); isAssigned = true; }
                                     }
                                 });
-
-                                // 如果真的完全匹配不到，就统一发配到策划部的最后一个小组里作为 Buffer
                                 if (!isAssigned) {
-                                    if (newData.departments[0].branches.length > 0) {
-                                        newData.departments[0].branches[newData.departments[0].branches.length-1].members.push(newEmp);
-                                    }
+                                    if (newData.departments[0].branches.length > 0) newData.departments[0].branches[newData.departments[0].branches.length-1].members.push(newEmp);
                                 }
                             }
                         });
-
                         setData(newData);
-                        alert(`✅ 花名册解析与重构成功！\n- 自动对齐并更新了 ${updatedCount} 名老员工信息。\n- 识别并新增了 ${newCount} 名新成员，已智能落位。\n\n（您可以直接通过鼠标拖拽卡片来微调新员工的具体所属小组。）`);
-
+                        alert(`✅ 花名册解析与重构成功！\n- 自动更新了 ${updatedCount} 名老员工信息。\n- 新增了 ${newCount} 名新成员。`);
                     } catch (err) {
-                        alert("解析失败，请确保上传的是合法的 .xlsx 文件格式。\n报错详情: " + err.message);
-                        console.error(err);
+                        alert("解析失败，请确保上传合法 .xlsx 格式。\n报错详情: " + err.message);
                     } finally {
                         setIsSyncingExcel(false);
                         if(syncExcelRef.current) syncExcelRef.current.value = "";
@@ -441,7 +386,62 @@
                 reader.readAsArrayBuffer(file);
             };
 
-            // ========== AI 智能解析并添加新员工模块 ==========
+            const handleSyncResigned = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                setIsImportingResigned(true);
+                
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        const buffer = new Uint8Array(event.target.result);
+                        const workbook = window.XLSX.read(buffer, {type: 'array'});
+                        const firstSheetName = workbook.SheetNames[0];
+                        const worksheet = workbook.Sheets[firstSheetName];
+                        const jsonRaw = window.XLSX.utils.sheet_to_json(worksheet, {raw: false});
+                        
+                        let importedCount = 0;
+                        let newResigned = [...resignedStaff];
+
+                        jsonRaw.forEach(row => {
+                            const nameKey = Object.keys(row).find(k => k.includes('姓名') || k.includes('名字'));
+                            const roleKey = Object.keys(row).find(k => k.includes('岗位') || k.includes('职位'));
+                            const dateKey = Object.keys(row).find(k => k.includes('离职时间') || k.includes('日期'));
+                            const reasonKey = Object.keys(row).find(k => k.includes('原因') || k.includes('复盘'));
+                            
+                            if (!nameKey || !row[nameKey]) return; 
+                            
+                            const empName = row[nameKey].toString().trim();
+                            if(newResigned.find(r => r.name === empName)) return;
+
+                            newResigned.push({
+                                id: 'res_' + Math.random().toString(36).substr(2, 9),
+                                name: empName,
+                                role: roleKey ? row[roleKey].toString().trim() : '未知岗位',
+                                resignDate: dateKey && row[dateKey] ? row[dateKey].toString().replace(/\//g, '-') : '未知',
+                                resignReason: reasonKey ? row[reasonKey].toString().trim() : '批量导入暂无原因',
+                                score: 0 
+                            });
+                            importedCount++;
+                        });
+                        setResignedStaff(newResigned);
+                        alert(`✅ 离职历史库导入成功！共新增 ${importedCount} 条记录。`);
+                    } catch (err) {
+                        alert("解析离职名单失败，报错详情: " + err.message);
+                    } finally {
+                        setIsImportingResigned(false);
+                        if(importResignRef.current) importResignRef.current.value = "";
+                    }
+                };
+                reader.readAsArrayBuffer(file);
+            };
+
+            const removeResignedStaff = (idToRemove) => {
+                if(window.confirm("确定要将此人从流失归档库中彻底抹除吗？")) {
+                    setResignedStaff(resignedStaff.filter(s => s.id !== idToRemove));
+                }
+            };
+
             const openAddEmpModal = (deptId, groupTitle) => {
                 setAddEmpTarget({ deptId, groupTitle });
                 setShowAddEmpModal(true);
@@ -465,7 +465,7 @@
                     const sysPrompt = `你是一个智能HR系统核心引擎。请从以下上传的资料文本中，精准提取人员的简历信息。
 要求：严格返回JSON格式，绝不要携带Markdown符号。
 返回JSON结构为：{"name":"张三", "school":"复旦大学", "education":"本科", "salary":"15000", "age": 25}。
-如果某项在资料里找不到，请自动填入合理的默认值（例如：school未知、education默认本科、salary未知、age默认24）。`;
+如果某项在资料里找不到，请自动填入合理的默认值。`;
                     
                     try {
                         const aiText = await fetchSiliconFlowAPI(sysPrompt, content);
@@ -475,14 +475,14 @@
                             id: "emp_" + Date.now(),
                             name: info.name || "新员工",
                             role: addEmpTarget.groupTitle,
-                            type: "正式员工",
+                            type: "正式员工（待入职）",
                             entryDate: CURRENT_DATE.toISOString().split('T')[0],
                             score: 100,
                             age: info.age || 24,
                             school: info.school || "未知",
                             education: info.education || "本科",
                             salary: info.salary || "未知",
-                            talentTag: "新入职(自动识别)",
+                            talentTag: "", 
                             behaviors: []
                         };
 
@@ -510,26 +510,17 @@
                 reader.readAsText(file);
             };
 
-            // ========== 纯原生 HTML5 拖拽排列引擎 ==========
             const handleDragStart = (e, deptId, groupTitle, user) => {
                 dragRef.current = { deptId, groupTitle, user };
                 e.dataTransfer.effectAllowed = "move";
                 e.target.classList.add('dragging-card');
             };
 
-            const handleDragEnd = (e) => {
-                e.target.classList.remove('dragging-card');
-            };
-
-            const handleDragOver = (e) => {
-                e.preventDefault(); 
-                e.dataTransfer.dropEffect = "move";
-            };
+            const handleDragEnd = (e) => { e.target.classList.remove('dragging-card'); };
+            const handleDragOver = (e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; };
 
             const handleDrop = (e, targetDeptId, targetGroupTitle, targetIndex) => {
-                e.preventDefault();
-                e.stopPropagation();
-                
+                e.preventDefault(); e.stopPropagation();
                 const source = dragRef.current;
                 if (!source) return;
 
@@ -561,11 +552,8 @@
                     newDept[listKey] = newDept[listKey].map(g => {
                         if (g.title !== targetGroupTitle) return g;
                         let newMembers = [...g.members];
-                        if (targetIndex === -1) {
-                            newMembers.push(draggedUser);
-                        } else {
-                            newMembers.splice(targetIndex, 0, draggedUser); 
-                        }
+                        if (targetIndex === -1) { newMembers.push(draggedUser); } 
+                        else { newMembers.splice(targetIndex, 0, draggedUser); }
                         return { ...g, members: newMembers };
                     });
                     return newDept;
@@ -573,50 +561,6 @@
 
                 setData(newData);
                 dragRef.current = null;
-            };
-
-            // ========== AI 策略与打分常规事件 ==========
-            const handleGenerateAIProfile = async () => {
-                if (!aiInputText.trim()) return;
-                setIsAiGenerating(true);
-                const sysPrompt = `你是一位专业的游戏行业HRBP。请根据用户提供的资料，提取结构化的【基础人才画像】。直接输出合法的JSON，不要Markdown代码块。格式：
-{"summary": "50字以内评价", "tags": ["标签1", "标签2"], "icebergAbove": [{"skill": "硬技能", "level": "及格/较差/优秀", "desc": "佐证"}], "icebergBelow": [{"trait": "软素质", "score": "分值/表现", "desc": "佐证"}]}`;
-                try {
-                    const content = await fetchSiliconFlowAPI(sysPrompt, aiInputText);
-                    const profileData = parseAIResponse(content);
-                    updateGlobalUser({ ...selectedUser, aiProfile: profileData });
-                    setAiInputText("");
-                } catch (err) {
-                    if (err.message === "API_KEY_MISSING") alert("请先前往右上角配置库填写 硅基流动 API Key！");
-                    else alert("解析失败: " + err.message);
-                } finally {
-                    setIsAiGenerating(false);
-                }
-            };
-
-            const handleGenerateStrategy = async () => {
-                if (!strategyInput.trim()) return;
-                setIsStrategyLoading(true);
-                let highRiskStaff = [];
-                const checkUser = (u) => { if(u && !u.isVacant && Number(u.score)<80) highRiskStaff.push(`${u.name}(${u.role}, ${u.score}分)`) };
-                checkUser(data.producer);
-                data.departments.forEach(d => {
-                    checkUser(d.lead);
-                    if(d.isSpanning) d.branches.forEach(b => b.members.forEach(checkUser));
-                    else d.roles.forEach(r => r.members.forEach(checkUser));
-                });
-                const sysPrompt = `你是一位顶尖的OD专家。根据现状及目标，输出JSON格式推演报告，不要Markdown：
-{"feasibility": "高/中/低", "riskAnalysis": "痛点与爆雷风险分析(100字)", "actions": [{"type": "内部调整", "desc": "行动建议"}, {"type": "外部招聘", "desc": "建议"}]}`;
-                const userPrompt = `【目标】：${strategyInput}\n【高危卡点人员】：${highRiskStaff.join('; ') || '无'}\n请帮我出具干预策略。`;
-                try {
-                    const content = await fetchSiliconFlowAPI(sysPrompt, userPrompt);
-                    setStrategyReport(parseAIResponse(content));
-                } catch (err) {
-                    if (err.message === "API_KEY_MISSING") alert("请先前往右上角配置库填写 硅基流动 API Key！");
-                    else alert("推演失败: " + err.message);
-                } finally {
-                    setIsStrategyLoading(false);
-                }
             };
 
             const handleFileForDrawer = (e) => {
@@ -635,6 +579,47 @@
                     setIsParsingFile(false);
                 };
                 reader.readAsText(file);
+            };
+
+            const handleGenerateAIProfile = async () => {
+                if (!aiInputText.trim()) return;
+                setIsAiGenerating(true);
+                const sysPrompt = `你是一位专业的游戏行业HRBP。请根据用户提供的资料，提取结构化的【基础人才画像】。直接输出合法的JSON，不要Markdown代码块。格式：\n{"summary": "50字以内评价", "tags": ["标签1", "标签2"], "icebergAbove": [{"skill": "硬技能", "level": "及格/较差/优秀", "desc": "佐证"}], "icebergBelow": [{"trait": "软素质", "score": "分值/表现", "desc": "佐证"}]}`;
+                try {
+                    const content = await fetchSiliconFlowAPI(sysPrompt, aiInputText);
+                    const profileData = parseAIResponse(content);
+                    updateGlobalUser({ ...selectedUser, aiProfile: profileData });
+                    setAiInputText("");
+                } catch (err) {
+                    if (err.message === "API_KEY_MISSING") alert("请先前往右上角系统配置填写 硅基流动 API Key！");
+                    else alert("解析失败: " + err.message);
+                } finally {
+                    setIsAiGenerating(false);
+                }
+            };
+
+            const handleGenerateStrategy = async () => {
+                if (!strategyInput.trim()) return;
+                setIsStrategyLoading(true);
+                let highRiskStaff = [];
+                const checkUser = (u) => { if(u && !u.isVacant && Number(u.score)<80) highRiskStaff.push(`${u.name}(${u.role}, ${u.score}分)`) };
+                checkUser(data.producer);
+                data.departments.forEach(d => {
+                    checkUser(d.lead);
+                    if(d.isSpanning) d.branches.forEach(b => b.members.forEach(checkUser));
+                    else d.roles.forEach(r => r.members.forEach(checkUser));
+                });
+                const sysPrompt = `你是一位顶尖的OD专家。根据现状及目标，输出JSON格式推演报告，不要Markdown：\n{"feasibility": "高/中/低", "riskAnalysis": "痛点与爆雷风险分析(100字)", "actions": [{"type": "内部调整", "desc": "行动建议"}, {"type": "外部招聘", "desc": "建议"}]}`;
+                const userPrompt = `【目标】：${strategyInput}\n【高危卡点人员】：${highRiskStaff.join('; ') || '无'}\n请帮我出具干预策略。`;
+                try {
+                    const content = await fetchSiliconFlowAPI(sysPrompt, userPrompt);
+                    setStrategyReport(parseAIResponse(content));
+                } catch (err) {
+                    if (err.message === "API_KEY_MISSING") alert("请先前往右上角系统配置填写 硅基流动 API Key！");
+                    else alert("推演失败: " + err.message);
+                } finally {
+                    setIsStrategyLoading(false);
+                }
             };
 
             const handleSubmitScore = () => {
@@ -673,9 +658,7 @@
                 setIsDrawerOpen(false); setShowResignModal(false); setResignReason("");
             };
 
-            const handleDeleteTemplate = (id) => {
-                setScoringTemplates(scoringTemplates.filter(t => t.id !== id));
-            };
+            const handleDeleteTemplate = (id) => { setScoringTemplates(scoringTemplates.filter(t => t.id !== id)); };
 
             const handleAddDraftRule = () => {
                 if (!draftRuleName.trim() || !draftRulePenalty) return;
@@ -689,36 +672,84 @@
                 setIsCreatingTpl(false); setNewTplName(""); setNewTplRules([]);
             };
 
-            // ========== 单个卡片 UI 渲染 ==========
+            const handleResetData = () => {
+                if(window.confirm("危险操作：将清除所有人员、打分及模板数据，恢复至系统出厂设置。确认继续？")) {
+                    localStorage.removeItem('beta_team_data');
+                    localStorage.removeItem('beta_resigned_staff');
+                    localStorage.removeItem('beta_scoring_tpl');
+                    window.location.reload();
+                }
+            };
+
+            const groupedResigned = resignedStaff.reduce((acc, staff) => {
+                const role = staff.role || '';
+                let cat = '其他支撑线';
+                if (role.includes('策') || role.includes('关卡') || role.includes('数值')) cat = '策划中枢';
+                else if (role.includes('程') || role.includes('开发') || role.includes('端') || role.includes('技术')) cat = '程序与技术';
+                else if (role.includes('美') || role.includes('原画') || role.includes('动效') || role.includes('UI')) cat = '美术中心';
+                else if (role.includes('测') || role.includes('QA')) cat = '测试 QA';
+                else if (role.includes('视频') || role.includes('投放') || role.includes('运营') || role.includes('市场')) cat = '市场与发行';
+                
+                if (!acc[cat]) acc[cat] = [];
+                acc[cat].push(staff);
+                return acc;
+            }, {});
+
             const EmployeeCard = ({ user }) => {
                 if (user.isVacant) return <div className="p-2 rounded-lg border border-dashed border-slate-600 bg-slate-900/40 opacity-70"><span className="text-[11px] text-slate-400">{user.role}</span></div>;
 
                 const score = Number(user.score);
-                let classes = "bg-slate-900 border-slate-700 hover:border-slate-500 cursor-grab active:cursor-grabbing", txtClass = "text-slate-100", scoreCls = "text-green-400 bg-slate-950 border-slate-800";
+                let classes = "bg-slate-900 border-slate-700 hover:border-slate-500 cursor-grab active:cursor-grabbing";
+                let txtClass = "text-slate-100";
+                let scoreCls = "text-green-400 bg-slate-950 border-slate-800";
                 let Icon = null;
 
+                // 仅仅基于【分数】动态计算外框与名字颜色
                 if (!isNaN(score)) {
                     if (score < 60) {
-                        classes = "bg-red-950/30 border-red-900/60 ring-1 ring-red-500/50 shadow-[0_0_10px_rgba(239,68,68,0.2)] cursor-grab active:cursor-grabbing"; txtClass = "text-red-400"; scoreCls = "text-red-400 bg-red-950 border-red-900/50 font-bold";
+                        classes = "bg-red-950/30 border-red-900/60 ring-1 ring-red-500/50 shadow-[0_0_10px_rgba(239,68,68,0.2)] cursor-grab active:cursor-grabbing"; 
+                        txtClass = "text-red-400"; 
+                        scoreCls = "text-red-400 bg-red-950 border-red-900/50 font-bold";
                         Icon = <ShieldAlert className="absolute -top-2 -right-2 w-5 h-5 text-red-500 bg-[#0B1120] rounded-full" />;
                     } else if (score < 80) {
-                        classes = "bg-yellow-950/20 border-yellow-800/50 ring-1 ring-yellow-500/40 shadow-[0_0_10px_rgba(234,179,8,0.1)] cursor-grab active:cursor-grabbing"; txtClass = "text-yellow-400"; scoreCls = "text-yellow-400 bg-yellow-950 border-yellow-900/50 font-bold";
+                        classes = "bg-yellow-950/20 border-yellow-800/50 ring-1 ring-yellow-500/40 shadow-[0_0_10px_rgba(234,179,8,0.1)] cursor-grab active:cursor-grabbing"; 
+                        txtClass = "text-yellow-400"; 
+                        scoreCls = "text-yellow-400 bg-yellow-950 border-yellow-900/50 font-bold";
                         Icon = <AlertTriangle className="absolute -top-1.5 -right-1.5 w-4 h-4 text-yellow-500 bg-[#0B1120] rounded-full" />;
                     }
                 }
-                if (user.talentTag && user.talentTag.includes('待离职')) txtClass = "text-red-500/70 line-through";
+                
+                // 【待离职】标签仅仅追加“横线和半透明效果”
+                if (user.talentTag === '待离职') {
+                    txtClass += " line-through opacity-70";
+                }
+
+                // 待入职状态的虚线处理 (由底层引擎保证强一致性)
+                const empDetails = calculateEmploymentDetails(user.entryDate, user.type);
+                const isPending = empDetails.status.includes('待入职');
 
                 return (
-                    <div onClick={() => {if(!user.isVacant){setSelectedUser(user); setIsDrawerOpen(true);}}} className={`relative flex flex-col p-2.5 rounded-lg border transition-all ${classes} ${user.talentTag && user.talentTag.includes('待入职')?'opacity-70 border-dashed':''}`}>
+                    <div onClick={() => {if(!user.isVacant){setSelectedUser(user); setIsDrawerOpen(true);}}} className={`relative flex flex-col p-2.5 rounded-lg border transition-all ${classes} ${isPending ? 'opacity-75 border-dashed border-slate-500 bg-slate-900/60' : ''}`}>
                         {Icon}
+                        
+                        {/* Header: 名字与分数 */}
                         <div className="flex justify-between items-center w-full mb-1.5">
-                            <span className={`text-[14px] font-bold whitespace-nowrap transition-colors ${txtClass}`}>{user.name}</span>
+                            <span className={`text-[15px] font-bold whitespace-nowrap transition-colors ${txtClass}`}>{user.name}</span>
                             {user.score !== undefined && <span className={`text-[11px] whitespace-nowrap px-1.5 py-0.5 rounded border transition-colors ${scoreCls}`}>{score}分</span>}
                         </div>
+                        
+                        {/* Tags: 用工徽章 + 特殊盘点标签 (极简版) */}
                         <div className="flex flex-wrap items-center gap-1.5 w-full">
-                            {getStatusBadge(calculateEmploymentDetails(user.entryDate, user.type).status)}
-                            {user.talentTag && <span className="text-[10px] text-slate-400 max-w-[80px] truncate">{user.talentTag}</span>}
-                            {user.aiProfile && <Sparkles className="w-3 h-3 text-blue-400 ml-auto animate-pulse" title="已生成画像" />}
+                            {getStatusBadge(empDetails.status)}
+                            {user.talentTag && user.talentTag !== '待离职' && (
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded border ${
+                                    user.talentTag === '核心骨干' ? 'bg-yellow-900/40 text-yellow-300 border-yellow-500/40' :
+                                    user.talentTag === '主子背' ? 'bg-rose-900/40 text-rose-300 border-rose-500/40' :
+                                    user.talentTag === '高潜' ? 'bg-blue-900/40 text-blue-300 border-blue-500/40' :
+                                    'bg-indigo-900/40 text-indigo-300 border-indigo-500/30'
+                                }`}>{user.talentTag}</span>
+                            )}
+                            {user.aiProfile && <Sparkles className="ml-auto w-3 h-3 text-blue-400 animate-pulse" title="已生成AI画像" />}
                         </div>
                     </div>
                 );
@@ -730,12 +761,12 @@
                     <div className="flex justify-between items-end border-b border-slate-800/80 pb-5 mb-6 min-w-[1500px]">
                         <div>
                             <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent flex items-center gap-3">
-                                <Briefcase className="w-8 h-8 text-blue-500" /> 纸牌项目组 · 人才效能驾驶舱
+                                <Briefcase className="w-8 h-8 text-blue-500" /> 纸牌项目组 · 组织效能大盘
                             </h1>
                             <div className="text-slate-400 mt-4 flex items-center gap-6">
-                                <span className="flex items-center gap-1.5"><Calendar className="w-4 h-4 text-slate-500"/> 系统时间: <strong className="text-slate-300">2026-06-18</strong></span>
+                                <span className="flex items-center gap-1.5"><Calendar className="w-4 h-4 text-slate-500"/> 锚点时间: <strong className="text-slate-300">2026-06-18</strong></span>
                                 <span className="flex items-center gap-1.5 text-yellow-500/80 text-xs"><span className="inline-block w-2 h-2 bg-yellow-500 rounded-full"></span> 警告 (&lt;80分)</span>
-                                <span className="flex items-center gap-1.5 text-red-500/80 text-xs"><span className="inline-block w-2 h-2 bg-red-500 rounded-full"></span> 淘汰预警 (&lt;60分)</span>
+                                <span className="flex items-center gap-1.5 text-red-500/80 text-xs"><span className="inline-block w-2 h-2 bg-red-500 rounded-full"></span> 淘汰 (&lt;60分)</span>
                                 <div className="ml-4 flex bg-slate-900 rounded-lg p-1 border border-slate-800">
                                     <button onClick={()=>setActiveTab('kanban')} className={`px-4 py-1.5 rounded text-sm font-bold transition-all ${activeTab==='kanban' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'}`}>排兵布阵大盘</button>
                                     <button onClick={()=>setActiveTab('strategy')} className={`px-4 py-1.5 rounded text-sm font-bold flex items-center gap-1.5 transition-all ${activeTab==='strategy' ? 'bg-purple-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'}`}><BrainCircuit className="w-4 h-4"/> AI HRBP 策略中枢</button>
@@ -743,24 +774,24 @@
                             </div>
                         </div>
                         <div className="flex items-center gap-3">
-                            {/* SheetJS 智能同步按钮 */}
                             <label className="flex items-center gap-2 px-4 py-2 bg-emerald-900/40 hover:bg-emerald-800/60 text-emerald-400 border border-emerald-700/50 rounded-lg text-sm font-bold cursor-pointer transition-all">
                                 {isSyncingExcel ? <Loader2 className="w-4 h-4 animate-spin"/> : <FileSpreadsheet className="w-4 h-4"/>}
                                 {isSyncingExcel ? "同步大盘中..." : "📥 智能同步花名册"}
-                                <input type="file" className="hidden" accept=".xlsx,.xls" onChange={handleSyncRoster} ref={syncExcelRef} />
+                                <input type="file" className="hidden" accept=".xlsx,.xls,.csv" onChange={handleSyncRoster} ref={syncExcelRef} />
                             </label>
                             <button onClick={() => setShowSettingsModal(true)} className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-sm border border-slate-700">
-                                <FileCog className="w-4 h-4"/> API 与考核配置库
+                                <Settings className="w-4 h-4"/> 全局系统配置
                             </button>
                         </div>
                     </div>
 
-                    {/* Tab 1: Kanban 架构大盘 */}
+                    {/* === Tab 1: Kanban 看板 === */}
                     {activeTab === 'kanban' && (
                         <div className="w-full pb-20 min-w-[2000px]">
+                            {/* 制作人 */}
                             <div className="flex justify-center mb-10 relative">
                                 <div className="w-64 bg-gradient-to-b from-blue-900/20 to-slate-900 rounded-xl p-1 shadow-lg border border-blue-700/30 relative z-10">
-                                    <div className="bg-slate-900 rounded-lg p-3 flex flex-col items-center justify-center cursor-pointer hover:bg-slate-800" onClick={() => handleUserClick(data.producer)}>
+                                    <div className="bg-slate-900 rounded-lg p-3 flex flex-col items-center justify-center cursor-pointer hover:bg-slate-800" onClick={() => {setSelectedUser(data.producer);setIsDrawerOpen(true);}}>
                                         <div className="text-[10px] text-blue-400 font-bold mb-1 uppercase tracking-widest">{data.producer.role}</div>
                                         <div className="font-bold text-lg text-slate-100 mb-1">{data.producer.name}</div>
                                         <div className="flex gap-2 text-xs"><span className="text-slate-400">{data.producer.score}分</span><span className="text-orange-400">{data.producer.talentTag}</span></div>
@@ -770,7 +801,7 @@
                             </div>
 
                             <div className="flex gap-6 items-start justify-center">
-                                {/* 策划部 */}
+                                {/* 策划部跨列渲染 */}
                                 <div className="w-[850px] shrink-0 rounded-2xl border border-blue-500/30 bg-gradient-to-b from-blue-900/10 to-slate-900/50 flex flex-col shadow-xl">
                                     <div className="p-2.5 font-bold text-[13px] text-center tracking-widest bg-blue-950/60 text-blue-300 border-b border-blue-500/20 rounded-t-2xl">策划研发中枢</div>
                                     <div className="p-5 flex flex-col items-center relative">
@@ -797,7 +828,7 @@
                                 {/* 平行部门 */}
                                 <div className="flex gap-4 shrink-0">
                                     {data.departments.slice(1).map((dept) => (
-                                        <div key={dept.id} className="w-[240px] shrink-0 rounded-2xl border border-slate-700/60 bg-slate-900/40 flex flex-col shadow-lg">
+                                        <div key={dept.id} className="w-[250px] shrink-0 rounded-2xl border border-slate-700/60 bg-slate-900/40 flex flex-col shadow-lg">
                                             <div className="p-2.5 font-bold text-[13px] text-center tracking-widest bg-slate-800/80 text-slate-300 border-b border-slate-700/60 rounded-t-2xl">{dept.name}</div>
                                             <div className="p-4 flex flex-col gap-4">
                                                 {dept.lead && <div className="relative pb-4 border-b border-slate-700/50 mb-1 group"><EmployeeCard user={dept.lead} /></div>}
@@ -818,39 +849,56 @@
                                 </div>
                             </div>
 
-                            {/* 流失库 */}
-                            {resignedStaff.length > 0 && (
-                                <div className="mt-20 pt-8 border-t border-dashed border-slate-800 max-w-[1500px] mx-auto">
-                                    <h2 className="text-lg font-bold text-slate-500 flex items-center gap-2 mb-6"><SearchX className="w-5 h-5"/> 离职与流失复盘库</h2>
-                                    <div className="flex flex-wrap gap-4">
-                                        {resignedStaff.map((staff, idx) => (
-                                            <div key={idx} className="w-64 bg-slate-900/40 border border-slate-800 p-4 rounded-xl grayscale opacity-70 hover:grayscale-0 hover:opacity-100 transition-all">
-                                                <div className="font-bold text-slate-300 border-b border-slate-800/80 pb-2 mb-2">{staff.name} <span className="text-xs text-slate-500 font-normal ml-2">{staff.role}</span></div>
-                                                <div className="text-xs text-slate-400 space-y-1.5">
-                                                    <div><span className="text-slate-600">离职时间：</span>{staff.resignDate}</div>
-                                                    <div><span className="text-slate-600">历史分值：</span>{staff.score}分</div>
-                                                    <div className="text-red-400/80 bg-red-950/20 p-2 rounded mt-2 border border-red-900/30"><strong className="text-red-400">原因：</strong>{staff.resignReason}</div>
+                            {/* --- 离职库与批量导入区 --- */}
+                            <div className="mt-20 pt-8 border-t border-dashed border-slate-800 max-w-[1500px] mx-auto">
+                                <div className="flex justify-between items-center mb-6">
+                                    <h2 className="text-lg font-bold text-slate-500 flex items-center gap-2"><SearchX className="w-5 h-5"/> 离职与流失复盘库</h2>
+                                    <label className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-lg text-xs font-bold cursor-pointer transition-all">
+                                        {isImportingResigned ? <Loader2 className="w-4 h-4 animate-spin"/> : <DownloadCloud className="w-4 h-4"/>}
+                                        {isImportingResigned ? "解析名单中..." : "📂 批量导入历史流失名单"}
+                                        <input type="file" className="hidden" accept=".xlsx,.xls,.csv" onChange={handleSyncResigned} ref={importResignRef} />
+                                    </label>
+                                </div>
+                                {resignedStaff.length > 0 ? (
+                                    <div className="flex flex-wrap items-start gap-x-8 gap-y-6">
+                                        {Object.entries(groupedResigned).map(([cat, staffs]) => (
+                                            <div key={cat} className="mb-2 min-w-[280px]">
+                                                <h3 className="text-[12px] font-bold text-slate-500 mb-3 border-l-2 border-slate-600 pl-2 uppercase tracking-widest">{cat} ({staffs.length}人)</h3>
+                                                <div className="flex flex-col gap-3">
+                                                    {staffs.map((staff, idx) => (
+                                                        <div key={staff.id || idx} className="w-64 bg-slate-900/40 border border-slate-800 p-4 rounded-xl relative group hover:bg-slate-900/80 transition-all">
+                                                            <div className="font-bold text-slate-300 border-b border-slate-800/80 pb-2 mb-2 pr-6 truncate">{staff.name} <span className="text-xs text-slate-500 font-normal ml-2">{staff.role}</span></div>
+                                                            <div className="text-xs text-slate-400 space-y-1.5">
+                                                                <div><span className="text-slate-600">离职时间：</span>{staff.resignDate}</div>
+                                                                <div><span className="text-slate-600">最终分值：</span>{staff.score}分</div>
+                                                                <div className="text-red-400/80 bg-red-950/20 p-2 rounded mt-2 border border-red-900/30 line-clamp-3" title={staff.resignReason}><strong className="text-red-400">原因：</strong>{staff.resignReason}</div>
+                                                            </div>
+                                                            <button onClick={() => removeResignedStaff(staff.id)} className="absolute top-3 right-3 text-slate-600 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100" title="彻底删除"><Trash2 className="w-4 h-4"/></button>
+                                                        </div>
+                                                    ))}
                                                 </div>
                                             </div>
                                         ))}
                                     </div>
-                                </div>
-                            )}
+                                ) : (
+                                    <div className="text-sm text-slate-600 text-center py-10 border border-slate-800 border-dashed rounded-xl">暂无流失归档记录</div>
+                                )}
+                            </div>
                         </div>
                     )}
 
-                    {/* Tab 2: AI HRBP 策略中枢 */}
+                    {/* === Tab 2: AI HRBP 策略中枢 === */}
                     {activeTab === 'strategy' && (
                         <div className="max-w-[1200px] pb-20 animate-in fade-in duration-500">
                             <div className="grid grid-cols-4 gap-4 mb-6">
                                 <div className="bg-slate-900 border border-slate-700/60 p-5 rounded-xl shadow-lg">
-                                    <div className="flex items-center gap-2 text-slate-400 text-xs mb-2"><Users className="w-4 h-4"/> 团队在编总人数</div>
+                                    <div className="flex items-center gap-2 text-slate-400 text-xs mb-2"><Users className="w-4 h-4"/> 团队在岗总人数</div>
                                     <div className="text-3xl font-bold text-white">{getTeamMetrics().headcount} <span className="text-sm font-normal text-slate-500">人</span></div>
                                 </div>
                                 <div className="bg-slate-900 border border-slate-700/60 p-5 rounded-xl shadow-lg">
                                     <div className="flex items-center gap-2 text-slate-400 text-xs mb-2"><LineChart className="w-4 h-4"/> 预估月度基本硬成本</div>
                                     <div className="text-3xl font-bold text-emerald-400">¥ {getTeamMetrics().totalMonthlyCost}</div>
-                                    <div className="text-[10px] text-slate-500 mt-1">仅基于底座工资粗算，不含绩效</div>
+                                    <div className="text-[10px] text-slate-500 mt-1">基于大盘数据粗算，不含绩效</div>
                                 </div>
                                 <div className="bg-slate-900 border border-slate-700/60 p-5 rounded-xl shadow-lg">
                                     <div className="flex items-center gap-2 text-slate-400 text-xs mb-2"><PieChart className="w-4 h-4"/> 团队平均效能健康度</div>
@@ -909,8 +957,8 @@
                                         <>
                                             <UploadCloud className="w-12 h-12 mx-auto text-slate-500 mb-4 group-hover:text-blue-400 transition-colors"/>
                                             <p className="text-base text-slate-300 mb-2">拖拽或点击上传应聘者简历/报告</p>
-                                            <p className="text-xs text-slate-500 mb-6">支持 .doc, .pdf, .txt, .xlsx 等格式</p>
-                                            <input type="file" className="hidden" id="addEmpFile" onChange={handleAiAddEmployee} ref={addEmpFileRef} accept=".doc,.docx,.pdf,.txt,.html,.csv,.xlsx" />
+                                            <p className="text-xs text-slate-500 mb-6">支持 .doc, .pdf, .txt 提取关键信息</p>
+                                            <input type="file" className="hidden" id="addEmpFile" onChange={handleAiAddEmployee} ref={addEmpFileRef} accept=".doc,.docx,.pdf,.txt,.html" />
                                             <label htmlFor="addEmpFile" className="cursor-pointer bg-blue-600 hover:bg-blue-500 text-white px-6 py-2.5 rounded-lg text-sm font-bold shadow-md transition-all inline-block">一键识别并添加入职</label>
                                         </>
                                     )}
@@ -938,7 +986,18 @@
                                         </div>
                                     </div>
                                     <div className="flex gap-2">
-                                        <button onClick={() => setIsEditingProfile(!isEditingProfile)} className={`p-2 rounded-lg transition-colors border ${isEditingProfile ? 'bg-blue-600 text-white border-blue-500' : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'}`}>{isEditingProfile ? <Save className="w-4 h-4" onClick={() => updateGlobalUser(selectedUser)} /> : <Edit2 className="w-4 h-4" />}</button>
+                                        <button 
+                                            onClick={() => {
+                                                if (isEditingProfile) {
+                                                    updateGlobalUser(selectedUser);
+                                                }
+                                                setIsEditingProfile(!isEditingProfile);
+                                            }} 
+                                            className={`p-2 rounded-lg transition-colors border ${isEditingProfile ? 'bg-blue-600 text-white border-blue-500 shadow-lg' : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'}`}
+                                            title="保存/编辑资料"
+                                        >
+                                            {isEditingProfile ? <Save className="w-4 h-4" /> : <Edit2 className="w-4 h-4" />}
+                                        </button>
                                         <button onClick={() => setShowResignModal(true)} className="p-2 bg-red-950/40 text-red-400 hover:text-red-300 border border-red-900/50 hover:bg-red-900/60 rounded-lg transition-colors" title="办理离职/淘汰"><UserMinus className="w-4 h-4" /></button>
                                         <button onClick={() => setIsDrawerOpen(false)} className="text-slate-400 hover:text-white p-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg transition-colors"><X className="w-4 h-4" /></button>
                                     </div>
@@ -946,15 +1005,42 @@
                                 <div className="flex-1 overflow-y-auto p-6 space-y-7 custom-scrollbar bg-slate-950/30">
                                     {/* 模块1 */}
                                     <div className="bg-slate-900 rounded-xl border border-slate-700/60 p-5 shadow-sm">
-                                        <h3 className="text-[11px] font-bold text-slate-400 mb-5 flex items-center gap-2 uppercase tracking-widest">1. 基础档案 (实时司龄引擎)</h3>
+                                        <h3 className="text-[11px] font-bold text-slate-400 mb-5 flex items-center gap-2 uppercase tracking-widest">1. 基础档案 (实时大盘联动)</h3>
                                         {isEditingProfile ? (
                                             <div className="grid grid-cols-2 gap-4 text-sm">
                                                 <div><label className="block text-[10px] text-slate-500 mb-1">姓名</label><input type="text" value={selectedUser.name} onChange={e=>setSelectedUser({...selectedUser, name: e.target.value})} className="w-full bg-slate-950 border border-slate-700 p-2 rounded text-white outline-none focus:border-blue-500" /></div>
-                                                <div><label className="block text-[10px] text-slate-500 mb-1">合同用工类型</label><select value={selectedUser.type} onChange={e=>setSelectedUser({...selectedUser, type: e.target.value})} className="w-full bg-slate-950 border border-slate-700 p-2 rounded text-white outline-none"><option value="正式员工">正式员工</option><option value="实习生">实习生</option></select></div>
-                                                <div><label className="block text-[10px] text-slate-500 mb-1 text-blue-400">入职日期 (更改将重算司龄)</label><input type="date" value={selectedUser.entryDate} onChange={e=>setSelectedUser({...selectedUser, entryDate: e.target.value})} className="w-full bg-blue-950/20 border border-blue-900/50 p-2 rounded text-blue-200 outline-none focus:border-blue-500" /></div>
-                                                <div><label className="block text-[10px] text-slate-500 mb-1">标签 (如:待离职/核心)</label><input type="text" value={selectedUser.talentTag || ''} onChange={e=>setSelectedUser({...selectedUser, talentTag: e.target.value})} className="w-full bg-slate-950 border border-slate-700 p-2 rounded text-white outline-none focus:border-blue-500" /></div>
+                                                
+                                                {/* 强制规范下拉菜单 1 */}
+                                                <div>
+                                                    <label className="block text-[10px] text-slate-500 mb-1">合同用工类型</label>
+                                                    <select value={selectedUser.type || ''} onChange={e=>setSelectedUser({...selectedUser, type: e.target.value})} className="w-full bg-slate-950 border border-slate-700 p-2 rounded text-white outline-none focus:border-blue-500">
+                                                        <option value="正式员工">正式员工 (按司龄自动推算转正阶段)</option>
+                                                        <option value="正式员工（已转正）">正式员工 (强制已转正)</option>
+                                                        <option value="试用一期">试用一期 (手动指定)</option>
+                                                        <option value="试用二期">试用二期 (手动指定)</option>
+                                                        <option value="正式员工（待入职）">正式员工（待入职）</option>
+                                                        <option value="实习生">实习生 (按日期自动推算)</option>
+                                                        <option value="实习生（待入职）">实习生（待入职）</option>
+                                                        <option value="外派">外派</option>
+                                                    </select>
+                                                </div>
+
+                                                {/* 强制规范下拉菜单 2 */}
+                                                <div>
+                                                    <label className="block text-[10px] text-slate-500 mb-1">特殊盘点标签</label>
+                                                    <select value={selectedUser.talentTag || ''} onChange={e=>setSelectedUser({...selectedUser, talentTag: e.target.value})} className="w-full bg-slate-950 border border-slate-700 p-2 rounded text-white outline-none focus:border-blue-500">
+                                                        <option value="">-- 无特殊标签 --</option>
+                                                        <option value="主子背">主子背</option>
+                                                        <option value="核心骨干">核心骨干</option>
+                                                        <option value="高潜">高潜</option>
+                                                        <option value="执行">执行</option>
+                                                        <option value="待离职">待离职 (将呈现删除线)</option>
+                                                    </select>
+                                                </div>
+
+                                                <div><label className="block text-[10px] text-slate-500 mb-1 text-blue-400">入职日期 (重算司龄)</label><input type="date" value={selectedUser.entryDate} onChange={e=>setSelectedUser({...selectedUser, entryDate: e.target.value})} className="w-full bg-blue-950/20 border border-blue-900/50 p-2 rounded text-blue-200 outline-none focus:border-blue-500" /></div>
                                                 <div><label className="block text-[10px] text-slate-500 mb-1">薪资水平</label><input type="text" value={selectedUser.salary || ''} onChange={e=>setSelectedUser({...selectedUser, salary: e.target.value})} className="w-full bg-slate-950 border border-slate-700 p-2 rounded text-emerald-400 font-mono outline-none" /></div>
-                                                <div><label className="block text-[10px] text-slate-500 mb-1">最高学历</label><select value={selectedUser.education || '本科'} onChange={e=>setSelectedUser({...selectedUser, education: e.target.value})} className="w-full bg-slate-950 border border-slate-700 p-2 rounded text-white outline-none"><option value="大专">大专</option><option value="本科">本科</option><option value="硕士">硕士</option></select></div>
+                                                <div><label className="block text-[10px] text-slate-500 mb-1">最高学历</label><select value={selectedUser.education || '本科'} onChange={e=>setSelectedUser({...selectedUser, education: e.target.value})} className="w-full bg-slate-950 border border-slate-700 p-2 rounded text-white outline-none"><option value="大专">大专</option><option value="本科">本科</option><option value="硕士">硕士</option><option value="博士">博士</option></select></div>
                                                 <div className="col-span-2"><label className="block text-[10px] text-slate-500 mb-1">毕业院校</label><input type="text" value={selectedUser.school || ''} onChange={e=>setSelectedUser({...selectedUser, school: e.target.value})} className="w-full bg-slate-950 border border-slate-700 p-2 rounded text-white outline-none focus:border-blue-500" /></div>
                                             </div>
                                         ) : (
@@ -968,7 +1054,7 @@
                                                         </>
                                                     );
                                                 })()}
-                                                <div><div className="text-slate-500 text-[10px] mb-1.5 uppercase font-medium">特殊盘点标签</div><div className="text-slate-300 font-medium">{selectedUser.talentTag || '无'}</div></div>
+                                                <div><div className="text-slate-500 text-[10px] mb-1.5 uppercase font-medium">特殊盘点标签</div><div className="text-indigo-300 font-medium">{selectedUser.talentTag || '-- 无 --'}</div></div>
                                                 <div><div className="text-slate-500 text-[10px] mb-1.5 uppercase font-medium">最高学历</div><div className="text-slate-200 font-medium">{selectedUser.education || '未知'}</div></div>
                                                 <div className="col-span-2"><div className="text-slate-500 text-[10px] mb-1.5 uppercase font-medium">毕业院校</div><div className="text-slate-200 font-medium">{selectedUser.school || '未知'}</div></div>
                                                 <div><div className="text-slate-500 text-[10px] mb-1.5 uppercase font-medium">现阶段薪资</div><div className="text-emerald-400 font-mono font-bold bg-emerald-950/40 px-2 py-0.5 rounded w-max border border-emerald-500/20">{selectedUser.salary || '未知'}</div></div>
@@ -1100,7 +1186,7 @@
                                     <button onClick={() => { setShowSettingsModal(false); setIsCreatingTpl(false); }} className="text-slate-400 hover:text-white"><X className="w-5 h-5"/></button>
                                 </div>
                                 <div className="p-6 overflow-y-auto flex-1 custom-scrollbar space-y-8">
-                                    <div className="bg-[#0B1120] border border-blue-900/50 rounded-xl p-5 shadow-inner">
+                                    <div className="bg-[#0B1120] border border-blue-900/50 rounded-xl p-5 shadow-inner relative">
                                         <h3 className="text-sm font-bold text-blue-400 mb-4 flex items-center gap-2"><Key className="w-4 h-4"/> 硅基流动 (SiliconFlow) API 引擎配置</h3>
                                         <div className="space-y-4">
                                             <div><label className="block text-[11px] text-slate-500 mb-1.5 uppercase tracking-wider">API Key (sk-...)</label><input type="password" value={sfApiKey} onChange={e => {setSfApiKey(e.target.value); localStorage.setItem('sf_api_key', e.target.value)}} className="w-full bg-slate-900 border border-slate-700 p-2.5 rounded text-white outline-none focus:border-blue-500 text-sm" placeholder="请填入您的 SiliconFlow 密钥" /></div>
@@ -1113,6 +1199,7 @@
                                             </div>
                                             <p className="text-[10px] text-slate-500 border-l-2 border-slate-700 pl-2">您的密钥仅加密存储在本地浏览器的 localStorage 中，退出后不会泄露，请放心使用。</p>
                                         </div>
+                                        <button onClick={handleResetData} className="absolute top-4 right-4 flex items-center gap-1.5 text-[10px] bg-red-950/40 hover:bg-red-900/60 text-red-400 border border-red-900/50 px-2 py-1.5 rounded transition-all"><RotateCcw className="w-3 h-3"/> 恢复出厂设置并清空缓存</button>
                                     </div>
                                     <div>
                                         {!isCreatingTpl ? (
