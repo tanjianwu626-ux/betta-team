@@ -200,6 +200,13 @@
             const [addTarget, setAddTarget] = useState(null); 
             const [hcData, setHcData] = useState({ name: "", level: "P1" });
 
+            // 考核包创建状态
+            const [isCreatingTpl, setIsCreatingTpl] = useState(false);
+            const [newTplName, setNewTplName] = useState("");
+            const [newTplRules, setNewTplRules] = useState([]);
+            const [draftRuleName, setDraftRuleName] = useState("");
+            const [draftRulePenalty, setDraftRulePenalty] = useState("");
+
             const addEmpFileRef = useRef(null);
             const syncExcelRef = useRef(null);
             const importResignRef = useRef(null);
@@ -426,6 +433,23 @@
                     dept.groups.forEach(g => { g.members = g.members.filter(m => m.id !== userId); });
                 });
                 setData(newData);
+            };
+
+            // ========== 考核包模板管理 ==========
+            const handleDeleteTemplate = (id) => {
+                setScoringTemplates(scoringTemplates.filter(t => t.id !== id));
+            };
+
+            const handleAddDraftRule = () => {
+                if (!draftRuleName.trim() || !draftRulePenalty) return;
+                setNewTplRules([...newTplRules, { id: `r_${Math.random()}`, name: draftRuleName, penalty: Number(draftRulePenalty), type: Number(draftRulePenalty) < 0 ? "negative" : "positive", tags: [] }]);
+                setDraftRuleName(""); setDraftRulePenalty("");
+            };
+
+            const handleSaveNewTemplate = () => {
+                if (!newTplName.trim()) return alert("请输入名称");
+                setScoringTemplates([...scoringTemplates, { id: `tpl_${Math.random()}`, name: newTplName, rules: newTplRules }]);
+                setIsCreatingTpl(false); setNewTplName(""); setNewTplRules([]);
             };
 
             // ========== 原生拖拽引擎 ==========
@@ -1144,7 +1168,7 @@
                             <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl">
                                 <div className="p-5 border-b border-slate-800 flex justify-between items-center bg-slate-800/40">
                                     <h2 className="text-lg font-bold text-white flex items-center gap-2"><FileCog className="w-5 h-5"/> 系统设置与配置库</h2>
-                                    <button onClick={() => setShowSettingsModal(false)} className="text-slate-400 hover:text-white"><X className="w-5 h-5"/></button>
+                                    <button onClick={() => { setShowSettingsModal(false); setIsCreatingTpl(false); }} className="text-slate-400 hover:text-white"><X className="w-5 h-5"/></button>
                                 </div>
                                 <div className="p-6 overflow-y-auto flex-1 custom-scrollbar space-y-8">
                                     <div className="bg-[#0B1120] border border-blue-900/50 rounded-xl p-5 shadow-inner relative">
@@ -1161,6 +1185,34 @@
                                             <p className="text-[10px] text-slate-500 border-l-2 border-slate-700 pl-2">您的密钥仅加密存储在本地浏览器的 localStorage 中，退出后不会泄露，请放心使用。</p>
                                         </div>
                                     </div>
+                                    
+                                    {/* 考核包模板管理区域 */}
+                                    <div>
+                                        {!isCreatingTpl ? (
+                                            <>
+                                                <div className="flex justify-between items-center mb-4"><h3 className="text-sm font-bold text-slate-300 flex items-center gap-2"><FileCog className="w-4 h-4"/> 岗位考核大类模版库</h3><button onClick={() => setIsCreatingTpl(true)} className="flex items-center gap-1 text-xs bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 px-3 py-1.5 rounded border border-blue-500/50"><Plus className="w-3 h-3"/> 新增考核大类</button></div>
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    {scoringTemplates.map(tpl => (
+                                                        <div key={tpl.id} className="bg-slate-950 border border-slate-800 rounded-lg p-4 group relative hover:border-blue-500/30 transition-all">
+                                                            <div className="font-bold text-slate-200 text-sm mb-1">{tpl.name}</div>
+                                                            <div className="text-xs text-slate-500">内含 <strong className="text-blue-400">{tpl.rules.length}</strong> 项打分细则</div>
+                                                            <button onClick={() => handleDeleteTemplate(tpl.id)} className="absolute top-3 right-3 text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="w-4 h-4"/></button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <div className="space-y-4 bg-slate-900 border border-blue-900/40 p-5 rounded-xl animate-in fade-in">
+                                                <div className="flex justify-between items-center border-b border-slate-800 pb-2"><h3 className="text-sm font-bold text-blue-400">创建新考核大类</h3><button onClick={() => setIsCreatingTpl(false)} className="text-xs text-slate-500">返回</button></div>
+                                                <div><label className="text-xs text-slate-400 mb-1 block">大类名称 *</label><input type="text" value={newTplName} onChange={(e) => setNewTplName(e.target.value)} placeholder="如：系统策划考核标准" className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-sm outline-none focus:border-blue-500" /></div>
+                                                <div className="space-y-3"><label className="text-xs text-slate-400 block">预设扣分/加分细则 (至少1条) *</label><div className="flex gap-2"><input type="text" value={draftRuleName} onChange={(e) => setDraftRuleName(e.target.value)} placeholder="规则描述 (如: 进度延期)" className="flex-1 bg-slate-950 border border-slate-700 rounded p-2 text-xs outline-none" /><input type="number" value={draftRulePenalty} onChange={(e) => setDraftRulePenalty(e.target.value)} placeholder="分值 (如: -10)" className="w-24 bg-slate-950 border border-slate-700 rounded p-2 text-xs outline-none" /><button onClick={handleAddDraftRule} className="bg-slate-800 hover:bg-slate-700 px-3 rounded text-xs border border-slate-700">添加</button></div>
+                                                    {newTplRules.length > 0 && <div className="mt-3 space-y-1">{newTplRules.map((r, i) => (<div key={i} className="flex justify-between items-center bg-slate-950 p-2 rounded text-xs border border-slate-800"><span className="text-slate-300">{r.name}</span><span className={`font-mono font-bold ${r.penalty < 0 ? 'text-red-400' : 'text-green-400'}`}>{r.penalty > 0 ? '+' : ''}{r.penalty}</span></div>))}</div>}
+                                                </div>
+                                                <button onClick={handleSaveNewTemplate} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 rounded-lg text-sm mt-2">保存大类</button>
+                                            </div>
+                                        )}
+                                    </div>
+
                                     <button onClick={handleResetData} className="flex items-center gap-1.5 text-[10px] bg-red-950/40 hover:bg-red-900/60 text-red-400 border border-red-900/50 px-3 py-2 rounded transition-all"><RotateCcw className="w-3 h-3"/> 恢复出厂设置并清空所有缓存数据</button>
                                 </div>
                             </div>
