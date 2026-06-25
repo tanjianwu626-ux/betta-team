@@ -188,7 +188,9 @@
             // UI控制状态
             const [selectedUser, setSelectedUser] = useState(null);
             const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+            const [drawerPos, setDrawerPos] = useState({ top: 0, left: 0 }); // 新增跟随弹窗位置
             const [isEditingProfile, setIsEditingProfile] = useState(false);
+            
             const [showSettingsModal, setShowSettingsModal] = useState(false);
             const [showResignModal, setShowResignModal] = useState(false);
             const [resignReason, setResignReason] = useState("");
@@ -228,6 +230,33 @@
             const [strategyReport, setStrategyReport] = useState(null);
             const [isStrategyLoading, setIsStrategyLoading] = useState(false);
 
+            // ================= 悬浮档案舱定位逻辑 =================
+            const handleCardClick = (e, user) => {
+                e.stopPropagation();
+                const rect = e.currentTarget.getBoundingClientRect();
+                
+                const drawerWidth = 550;
+                const drawerHeight = 650; // 预估最大高度
+
+                // 默认显示在卡片右侧
+                let left = rect.right + 16;
+                // 如果右侧溢出屏幕，则显示在卡片左侧
+                if (left + drawerWidth > window.innerWidth) {
+                    left = Math.max(16, rect.left - drawerWidth - 16);
+                }
+
+                // 垂直定位默认与卡片平齐
+                let top = rect.top;
+                // 如果下方溢出，则向上调整位置
+                if (top + drawerHeight > window.innerHeight) {
+                    top = Math.max(16, window.innerHeight - drawerHeight - 16);
+                }
+
+                setDrawerPos({ left, top });
+                setSelectedUser(user);
+                setIsDrawerOpen(true);
+            };
+
             const getTeamMetrics = () => {
                 let headcount = 0, riskCount = 0, totalMonthlyCost = 0, totalScore = 0, validScoreCount = 0;
                 const processUser = (u) => {
@@ -236,7 +265,7 @@
                         if (Number(u.score) !== undefined) {
                             totalScore += Number(u.score);
                             validScoreCount++;
-                            if (Number(u.score) < 80) riskCount++;
+                            if (Number(u.score) <= 80) riskCount++; // <=80 计入警告状态
                         }
                         if (u.salary && u.salary !== "未知" && !u.salary.includes("天") && !u.salary.includes("保密")) {
                             const num = parseInt(u.salary.toString().replace(/,/g, ''), 10);
@@ -611,11 +640,29 @@
                 setIsDrawerOpen(false); setShowResignModal(false); setResignReason("");
             };
 
+            const handleDeleteUser = () => {
+                if(window.confirm(`【危险操作】确定要彻底物理删除 ${selectedUser.name} 的所有档案数据吗？\n此操作将完全抹除该员工的一切记录且不可恢复！`)) {
+                    let newData = { ...data };
+                    if (newData.producer?.id === selectedUser.id) {
+                        alert("制作人作为顶层节点不可直接删除！");
+                        return;
+                    }
+                    newData.departments.forEach(dept => {
+                        if (dept.lead?.id === selectedUser.id) dept.lead = null;
+                        dept.groups.forEach(g => {
+                            g.members = g.members.filter(m => m.id !== selectedUser.id);
+                        });
+                    });
+                    setData(newData);
+                    setIsDrawerOpen(false);
+                }
+            };
+
             const handleGenerateStrategy = async () => {
                 if (!strategyInput.trim()) return;
                 setIsStrategyLoading(true);
                 let highRiskStaff = [];
-                const checkUser = (u) => { if(u && !u.isVacant && Number(u.score)<80) highRiskStaff.push(`${u.name}(${u.role}, ${u.score}分)`) };
+                const checkUser = (u) => { if(u && !u.isVacant && Number(u.score)<=80) highRiskStaff.push(`${u.name}(${u.role}, ${u.score}分)`) };
                 checkUser(data.producer);
                 data.departments.forEach(d => {
                     checkUser(d.lead);
@@ -655,11 +702,11 @@
                 let txtClass = "text-slate-100", scoreCls = "text-green-400 bg-slate-950 border-slate-800", Icon = null;
 
                 if (!isNaN(score)) {
-                    if (score < 60) {
+                    if (score <= 60) {
                         classes = "bg-red-950/30 border-red-900/60 ring-1 ring-red-500/50 shadow-[0_0_10px_rgba(239,68,68,0.2)]"; 
                         txtClass = "text-red-400"; scoreCls = "text-red-400 bg-red-950 border-red-900/50 font-bold";
                         Icon = <ShieldAlert className="absolute -top-2 -right-2 w-5 h-5 text-red-500 bg-[#0B1120] rounded-full" />;
-                    } else if (score < 80) {
+                    } else if (score <= 80) {
                         classes = "bg-yellow-950/20 border-yellow-800/50 ring-1 ring-yellow-500/40 shadow-[0_0_10px_rgba(234,179,8,0.1)]"; 
                         txtClass = "text-yellow-400"; scoreCls = "text-yellow-400 bg-yellow-950 border-yellow-900/50 font-bold";
                         Icon = <AlertTriangle className="absolute -top-1.5 -right-1.5 w-4 h-4 text-yellow-500 bg-[#0B1120] rounded-full" />;
@@ -672,7 +719,7 @@
                 const isPending = empDetails.status.includes('待入职');
 
                 return (
-                    <div draggable onDragStart={(e)=>handleDragStart(e, deptId, groupTitle, user)} onDragEnd={handleDragEnd} onDragOver={handleDragOver} onDrop={(e)=>handleDrop(e, deptId, groupTitle, mIdx)} onClick={() => {setSelectedUser(user); setIsDrawerOpen(true);}} className={`relative flex flex-col p-2.5 rounded-lg border transition-all ${classes} ${isPending ? 'opacity-75 border-dashed border-slate-500 bg-slate-900/60' : ''} w-full`}>
+                    <div draggable onDragStart={(e)=>handleDragStart(e, deptId, groupTitle, user)} onDragEnd={handleDragEnd} onDragOver={handleDragOver} onDrop={(e)=>handleDrop(e, deptId, groupTitle, mIdx)} onClick={(e) => handleCardClick(e, user)} className={`relative flex flex-col p-2.5 rounded-lg border transition-all ${classes} ${isPending ? 'opacity-75 border-dashed border-slate-500 bg-slate-900/60' : ''} w-full`}>
                         {Icon}
                         <div className="flex justify-between items-center w-full mb-1.5">
                             <span className={`text-[14px] font-bold whitespace-nowrap transition-colors ${txtClass}`}>{user.name}</span>
@@ -718,6 +765,7 @@
                             const reasonKey = Object.keys(row).find(k => k.includes('原因') || k.includes('复盘'));
                             
                             if (!nameKey || !row[nameKey]) return; 
+                            
                             const empName = row[nameKey].toString().trim();
                             if(newResigned.find(r => r.name === empName)) return;
 
@@ -762,6 +810,8 @@
                             </h1>
                             <div className="text-slate-400 mt-4 flex items-center gap-6">
                                 <span className="flex items-center gap-1.5"><Calendar className="w-4 h-4 text-slate-500"/> 系统时间: <strong className="text-slate-300">2026-06-18</strong></span>
+                                <span className="flex items-center gap-1.5 text-yellow-500/80 text-xs"><span className="inline-block w-2 h-2 bg-yellow-500 rounded-full"></span> 警告 (&lt;=80分)</span>
+                                <span className="flex items-center gap-1.5 text-red-500/80 text-xs"><span className="inline-block w-2 h-2 bg-red-500 rounded-full"></span> 淘汰 (&lt;=60分)</span>
                                 <div className="ml-4 flex bg-slate-900 rounded-lg p-1 border border-slate-800">
                                     <button onClick={()=>setActiveTab('kanban')} className={`px-4 py-1.5 rounded text-sm font-bold transition-all ${activeTab==='kanban' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'}`}>排兵布阵大盘</button>
                                     <button onClick={()=>setActiveTab('strategy')} className={`px-4 py-1.5 rounded text-sm font-bold flex items-center gap-1.5 transition-all ${activeTab==='strategy' ? 'bg-purple-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'}`}><BrainCircuit className="w-4 h-4"/> AI HRBP 策略中枢</button>
@@ -786,7 +836,7 @@
                             {/* 制作人 */}
                             <div className="flex justify-center mb-10 relative">
                                 <div className="w-64 bg-gradient-to-b from-blue-900/20 to-slate-900 rounded-xl p-1 shadow-lg border border-blue-700/30 relative z-10">
-                                    <div className="bg-slate-900 rounded-lg p-3 flex flex-col items-center justify-center cursor-pointer hover:bg-slate-800" onClick={() => {setSelectedUser(data.producer);setIsDrawerOpen(true);}}>
+                                    <div className="bg-slate-900 rounded-lg p-3 flex flex-col items-center justify-center cursor-pointer hover:bg-slate-800" onClick={(e) => handleCardClick(e, data.producer)}>
                                         <div className="text-[10px] text-blue-400 font-bold mb-1 uppercase tracking-widest">{data.producer.role}</div>
                                         <div className="font-bold text-lg text-slate-100 mb-1">{data.producer.name}</div>
                                     </div>
@@ -794,18 +844,16 @@
                                 <div className="absolute top-full left-1/2 w-px h-10 bg-slate-700"></div>
                             </div>
 
-                            {/* 五大中心平行排列 (采用自适应收缩容器 w-max + flex) */}
+                            {/* 五大中心平行排列 */}
                             <div className="flex gap-6 items-start justify-center flex-nowrap">
                                 {data.departments.map(dept => {
                                     const visibleGroups = dept.groups.filter(g => !g.isHidden);
                                     return (
                                     <div key={dept.id} className="w-max min-w-[280px] shrink-0 rounded-2xl border border-slate-700/60 bg-slate-900/40 flex flex-col shadow-xl">
                                         
-                                        {/* 部门表头与还原控制区 */}
                                         <div className="p-3 font-bold text-[13px] tracking-widest bg-slate-800/80 text-slate-300 border-b border-slate-700/60 rounded-t-2xl flex justify-between items-center gap-4">
                                             <div className="flex items-center gap-2 flex-wrap">
                                                 <span>{dept.name}</span>
-                                                {/* 显示被隐藏的项目，点击可还原 */}
                                                 {dept.isLeadHidden && (
                                                     <button onClick={() => toggleLeadHidden(dept.id, false)} className="flex items-center gap-1 text-[10px] font-normal bg-slate-700/50 hover:bg-slate-600 px-1.5 py-0.5 rounded text-slate-400" title="点击还原负责人"><Eye className="w-3 h-3"/>负责人</button>
                                                 )}
@@ -818,7 +866,6 @@
 
                                         <div className="p-5 flex flex-col items-center relative">
                                             
-                                            {/* 部门负责人 */}
                                             {!dept.isLeadHidden && (
                                                 <div className="w-[240px] mb-8 relative z-10 group/leadbox" onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, dept.id, 'lead', -1)}>
                                                     {dept.lead ? (
@@ -838,7 +885,6 @@
                                                 </div>
                                             )}
 
-                                            {/* 横向分支连线 (基于组的跨度动态拉伸) */}
                                             {dept.isSpanning && !dept.isLeadHidden && visibleGroups.length > 1 && (
                                                 <div className="border-t border-slate-600/50 relative h-6" style={{ width: `calc(100% - 240px)` }}>
                                                     {visibleGroups.map((_, i, arr) => (
@@ -847,7 +893,6 @@
                                                 </div>
                                             )}
 
-                                            {/* 各业务子组 (固定宽度 240px 防拉伸) */}
                                             <div className={`w-full flex justify-center gap-6 ${dept.isSpanning ? 'flex-row' : 'flex-col items-center'}`}>
                                                 {visibleGroups.map((g) => (
                                                     <div key={g.title} className="w-[240px] flex flex-col gap-2 min-h-[100px] pb-4 group/box" onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, dept.id, g.title, -1)}>
@@ -862,7 +907,6 @@
                                                             <EmployeeCard key={m.id} user={m} deptId={dept.id} groupTitle={g.title} mIdx={mIdx} />
                                                         ))}
                                                         
-                                                        {/* 底部新增双按钮 */}
                                                         <div className="flex gap-1 mt-1">
                                                             <button onClick={() => { setAddTarget({deptId: dept.id, groupTitle: g.title}); setShowAddEmpModal(true); }} className="flex-1 py-1.5 flex justify-center items-center gap-1 border border-dashed border-slate-700 text-slate-500 rounded hover:border-slate-500 hover:text-slate-300 hover:bg-slate-800/50 transition-colors text-[10px] font-bold"><Plus className="w-3 h-3"/> 入职</button>
                                                             <button onClick={() => { setAddTarget({deptId: dept.id, groupTitle: g.title}); setHcData({...hcData, name: g.title}); setShowAddHcModal(true); }} className="flex-1 py-1.5 flex justify-center items-center gap-1 border border-dashed border-blue-900/50 text-blue-500/60 rounded hover:border-blue-500 hover:text-blue-400 hover:bg-blue-950/30 transition-colors text-[10px] font-bold"><UserPlus className="w-3 h-3"/> HC</button>
@@ -927,7 +971,7 @@
                                 </div>
                                 <div className="bg-red-950/20 border border-red-900/40 p-5 rounded-xl shadow-lg">
                                     <div className="flex items-center gap-2 text-red-400/80 text-xs mb-2"><ShieldAlert className="w-4 h-4"/> 状态异常/高危人数</div>
-                                    <div className="text-3xl font-bold text-red-400">{getTeamMetrics().riskCount} <span className="text-sm font-normal text-red-500/70">人 (&lt;80分)</span></div>
+                                    <div className="text-3xl font-bold text-red-400">{getTeamMetrics().riskCount} <span className="text-sm font-normal text-red-500/70">人 (&lt;=80分)</span></div>
                                 </div>
                             </div>
                             <div className="grid grid-cols-3 gap-6">
@@ -960,21 +1004,29 @@
                         </div>
                     )}
 
-                    {/* === 侧边抽屉: 员工详情 === */}
+                    {/* === "如影随形"悬浮档案面板 === */}
                     {isDrawerOpen && selectedUser && (
                         <>
-                            <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-40 transition-opacity" onClick={() => setIsDrawerOpen(false)}></div>
-                            <div className="fixed top-0 right-0 h-full w-[550px] bg-[#0F172A] border-l border-slate-700 shadow-2xl z-50 flex flex-col">
-                                <div className="p-6 border-b border-slate-800 bg-slate-900/80 flex justify-between items-start">
+                            <div className="fixed inset-0 bg-slate-950/30 backdrop-blur-[2px] z-40 transition-opacity" onClick={() => setIsDrawerOpen(false)}></div>
+                            <div 
+                                className="fixed z-50 bg-[#0F172A] border border-slate-600 shadow-[0_0_40px_rgba(0,0,0,0.5)] rounded-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+                                style={{ 
+                                    top: `${drawerPos.top}px`, 
+                                    left: `${drawerPos.left}px`, 
+                                    width: '550px', 
+                                    maxHeight: '85vh' 
+                                }}
+                            >
+                                <div className="p-6 border-b border-slate-800 bg-slate-900/80 flex justify-between items-start shrink-0">
                                     <div>
                                         <h2 className="text-2xl font-bold text-white flex items-center gap-3">
                                             {selectedUser.name}
-                                            {Number(selectedUser.score) < 60 && <span className="bg-red-500/20 text-red-400 border border-red-500/30 text-xs px-2 py-0.5 rounded flex items-center gap-1"><ShieldAlert className="w-3 h-3"/> 淘汰预警</span>}
-                                            {Number(selectedUser.score) >= 60 && Number(selectedUser.score) < 80 && <span className="bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 text-xs px-2 py-0.5 rounded flex items-center gap-1"><AlertTriangle className="w-3 h-3"/> 状态警告</span>}
+                                            {Number(selectedUser.score) <= 60 && <span className="bg-red-500/20 text-red-400 border border-red-500/30 text-xs px-2 py-0.5 rounded flex items-center gap-1"><ShieldAlert className="w-3 h-3"/> 淘汰预警</span>}
+                                            {Number(selectedUser.score) > 60 && Number(selectedUser.score) <= 80 && <span className="bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 text-xs px-2 py-0.5 rounded flex items-center gap-1"><AlertTriangle className="w-3 h-3"/> 状态警告</span>}
                                         </h2>
                                         <div className="text-slate-400 mt-1.5 flex items-center gap-3 text-sm">
                                             <span className="font-medium">{selectedUser.role}</span><span className="text-slate-600">|</span>
-                                            <span className={`font-bold ${Number(selectedUser.score) < 60 ? 'text-red-400' : Number(selectedUser.score) < 80 ? 'text-yellow-400' : 'text-green-400'}`}>{selectedUser.score}分</span>
+                                            <span className={`font-bold ${Number(selectedUser.score) <= 60 ? 'text-red-400' : Number(selectedUser.score) <= 80 ? 'text-yellow-400' : 'text-green-400'}`}>{selectedUser.score}分</span>
                                         </div>
                                     </div>
                                     <div className="flex gap-2">
@@ -988,8 +1040,8 @@
                                         >
                                             {isEditingProfile ? <Save className="w-4 h-4" /> : <Edit2 className="w-4 h-4" />}
                                         </button>
-                                        <button onClick={() => setShowResignModal(true)} className="p-2 bg-red-950/40 text-red-400 hover:text-red-300 border border-red-900/50 hover:bg-red-900/60 rounded-lg transition-colors" title="办理离职/淘汰"><UserMinus className="w-4 h-4" /></button>
-                                        <button onClick={() => setIsDrawerOpen(false)} className="text-slate-400 hover:text-white p-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg transition-colors"><X className="w-4 h-4" /></button>
+                                        <button onClick={() => setShowResignModal(true)} className="p-2 bg-red-950/40 text-red-400 hover:text-red-300 border border-red-900/50 hover:bg-red-900/60 rounded-lg transition-colors" title="办理离职/流失归档"><UserMinus className="w-4 h-4" /></button>
+                                        <button onClick={() => setIsDrawerOpen(false)} className="p-2 bg-slate-800/80 text-slate-400 hover:text-white border border-slate-700 rounded-lg transition-colors" title="关闭面板"><X className="w-4 h-4" /></button>
                                     </div>
                                 </div>
                                 <div className="flex-1 overflow-y-auto p-6 space-y-7 custom-scrollbar bg-slate-950/30">
