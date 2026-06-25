@@ -31,13 +31,12 @@
     <script type="text/babel" data-type="module">
         import React, { useState, useEffect, useRef } from 'react';
         import { createRoot } from 'react-dom/client';
-        // 确保所有用到的图标都在此处准确导入
         import { 
             Activity, AlertTriangle, BrainCircuit, Briefcase, Calendar, ChevronDown,
             DownloadCloud, Edit2, FileCog, FileSpreadsheet, GraduationCap, Key,
             LineChart, Loader2, PieChart, Plus, RotateCcw, Save, SearchX,
             ShieldAlert, Sparkles, Target, Trash2, UploadCloud, UserCircle2, UserMinus,
-            UserPlus, Users, X, Settings
+            UserPlus, Users, X, Settings, EyeOff, Eye
         } from 'lucide-react';
 
         const CURRENT_DATE = new Date('2026-06-18');
@@ -87,58 +86,58 @@
             { id: "tpl_level_intern", name: "通用考核标准 (示例)", rules: [{ id: "r1", name: "单次不达标", penalty: -5, type: "negative", tags: ["执行力不足"] }] }
         ];
 
-        // ========== 组织大盘初始化 (新规范树状) ==========
+        // ========== 组织大盘初始化 ==========
         const initialTeamArchitecture = {
             producer: { id: "p1", name: "任光谦", role: "制作人", type: "正式员工", entryDate: "2020-03-01", score: 100, talentTag: "核心骨干", age: 34, school: "武汉大学", education: "本科", salary: "100000" },
             departments: [
                 {
-                    id: "dept_design", name: "策划部", isSpanning: true,
+                    id: "dept_design", name: "策划部", isSpanning: true, isLeadHidden: false,
                     lead: { id: "c1", name: "陈冠兰", role: "主策划", type: "正式员工", entryDate: "2021-06-15", score: 100, talentTag: "主子背", education: "本科", salary: "35000" },
                     groups: [
-                        { title: "系统策划", members: [
+                        { title: "系统策划", isHidden: false, members: [
                             { id: "c2", name: "朱琰", role: "系统策划", type: "正式员工", entryDate: "2023-05-10", score: 100, education: "本科", salary: "18000" },
                             { id: "c4", name: "王琳轲", role: "系统策划", type: "正式员工（待入职）", entryDate: "2026-07-01", score: 100, talentTag: "", education: "本科", salary: "15000" }
                         ]},
-                        { title: "数值策划", members: [ { id: "c8", name: "蔡玉林", role: "数值策划", type: "正式员工", entryDate: "2023-08-20", score: 100, talentTag: "高潜", education: "硕士", salary: "28000" } ]},
-                        { title: "活动策划", members: [ { id: "c6", name: "李青玉", role: "活动策划", type: "正式员工", entryDate: "2025-02-14", score: 100, education: "本科", salary: "14000" } ]},
-                        { title: "关卡策划", members: [ { id: "c9", name: "王昶越", role: "关卡组长", type: "正式员工", entryDate: "2022-04-10", score: 100, talentTag: "核心骨干", education: "本科", salary: "25000" } ]}
+                        { title: "数值策划", isHidden: false, members: [ { id: "c8", name: "蔡玉林", role: "数值策划", type: "正式员工", entryDate: "2023-08-20", score: 100, talentTag: "高潜", education: "硕士", salary: "28000" } ]},
+                        { title: "活动策划", isHidden: false, members: [ { id: "c6", name: "李青玉", role: "活动策划", type: "正式员工", entryDate: "2025-02-14", score: 100, education: "本科", salary: "14000" } ]},
+                        { title: "关卡策划", isHidden: false, members: [ { id: "c9", name: "王昶越", role: "关卡组长", type: "正式员工", entryDate: "2022-04-10", score: 100, talentTag: "核心骨干", education: "本科", salary: "25000" } ]}
                     ]
                 },
                 {
-                    id: "dept_tech", name: "程序部", isSpanning: true,
+                    id: "dept_tech", name: "程序部", isSpanning: true, isLeadHidden: false,
                     lead: { id: "t1", name: "戴佳文", role: "客户端主程", type: "正式员工", entryDate: "2022-01-05", score: 100, talentTag: "主子背", education: "本科", salary: "40000" },
                     groups: [
-                        { title: "前端开发", members: [ { id: "t2", name: "刘澎", role: "客户端开发", type: "正式员工", entryDate: "2024-03-10", score: 65, education: "本科", salary: "29000" } ]},
-                        { title: "后端开发", members: [ { id: "t3", name: "白冰", role: "服务端开发", type: "正式员工", entryDate: "2025-10-15", score: 100, talentTag: "执行", education: "本科", salary: "25000" } ]}
+                        { title: "前端开发", isHidden: false, members: [ { id: "t2", name: "刘澎", role: "客户端开发", type: "正式员工", entryDate: "2024-03-10", score: 65, education: "本科", salary: "29000" } ]},
+                        { title: "后端开发", isHidden: false, members: [ { id: "t3", name: "白冰", role: "服务端开发", type: "正式员工", entryDate: "2025-10-15", score: 100, talentTag: "执行", education: "本科", salary: "25000" } ]}
                     ]
                 },
                 {
-                    id: "dept_art", name: "美术部", isSpanning: true,
-                    lead: null, // 虚位以待
-                    groups: [
-                        { title: "原画", members: [ { id: "a4", name: "张蕴秀", role: "原画师", type: "正式员工", entryDate: "2023-02-15", score: 100, education: "本科", salary: "18000" } ]},
-                        { title: "UI", members: [] },
-                        { title: "3D模型", members: [] },
-                        { title: "动效", members: [ { id: "a2", name: "孙伟轩", role: "动效设计师", type: "正式员工", entryDate: "2022-11-10", score: 100, education: "本科", salary: "22000" } ]}
-                    ]
-                },
-                {
-                    id: "dept_market", name: "市场运营部", isSpanning: true,
+                    id: "dept_art", name: "美术部", isSpanning: true, isLeadHidden: false,
                     lead: null,
                     groups: [
-                        { title: "市场负责人", members: [] },
-                        { title: "优化师", members: [ { id: "m4", name: "张卓良", role: "投放优化师", type: "正式员工", entryDate: "2024-09-01", score: 100, education: "本科", salary: "23000" } ]},
-                        { title: "平面设计", members: [] },
-                        { title: "视频设计", members: [ { id: "m1", name: "任博伟", role: "视频设计师", type: "正式员工", entryDate: "2023-06-20", score: 100, education: "本科", salary: "21000" } ]},
-                        { title: "运营负责人", members: [] },
-                        { title: "运营", members: [ { id: "m6", name: "邢昊阳", role: "游戏运营", type: "正式员工", entryDate: "2023-03-15", score: 100, education: "本科", salary: "18000" } ]}
+                        { title: "原画", isHidden: false, members: [ { id: "a4", name: "张蕴秀", role: "原画师", type: "正式员工", entryDate: "2023-02-15", score: 100, education: "本科", salary: "18000" } ]},
+                        { title: "UI", isHidden: false, members: [] },
+                        { title: "3D模型", isHidden: false, members: [] },
+                        { title: "动效", isHidden: false, members: [ { id: "a2", name: "孙伟轩", role: "动效设计师", type: "正式员工", entryDate: "2022-11-10", score: 100, education: "本科", salary: "22000" } ]}
                     ]
                 },
                 {
-                    id: "dept_qa", name: "测试部", isSpanning: false,
+                    id: "dept_market", name: "市场运营部", isSpanning: true, isLeadHidden: false,
+                    lead: null,
+                    groups: [
+                        { title: "市场负责人", isHidden: false, members: [] },
+                        { title: "优化师", isHidden: false, members: [ { id: "m4", name: "张卓良", role: "投放优化师", type: "正式员工", entryDate: "2024-09-01", score: 100, education: "本科", salary: "23000" } ]},
+                        { title: "平面设计", isHidden: false, members: [] },
+                        { title: "视频设计", isHidden: false, members: [ { id: "m1", name: "任博伟", role: "视频设计师", type: "正式员工", entryDate: "2023-06-20", score: 100, education: "本科", salary: "21000" } ]},
+                        { title: "运营负责人", isHidden: false, members: [] },
+                        { title: "运营", isHidden: false, members: [ { id: "m6", name: "邢昊阳", role: "游戏运营", type: "正式员工", entryDate: "2023-03-15", score: 100, education: "本科", salary: "18000" } ]}
+                    ]
+                },
+                {
+                    id: "dept_qa", name: "测试部", isSpanning: false, isLeadHidden: false,
                     lead: { id: "q1", name: "刘禹杭", role: "测试组长", type: "正式员工", entryDate: "2023-07-01", score: 100, education: "本科", salary: "20000" },
                     groups: [
-                        { title: "测试执行", members: [ { id: "q2", name: "牟书含", role: "测试工程师", type: "正式员工", entryDate: "2024-08-10", score: 100, education: "本科", salary: "15000" } ]}
+                        { title: "测试执行", isHidden: false, members: [ { id: "q2", name: "牟书含", role: "测试工程师", type: "正式员工", entryDate: "2024-08-10", score: 100, education: "本科", salary: "15000" } ]}
                     ]
                 }
             ]
@@ -157,7 +156,6 @@
         function App() {
             const [activeTab, setActiveTab] = useState('kanban'); 
             
-            // 数据迁移与初始化
             const [data, setData] = useState(() => {
                 const saved = localStorage.getItem('beta_team_data');
                 if (saved) {
@@ -201,7 +199,7 @@
             const [addTarget, setAddTarget] = useState(null); 
             const [hcData, setHcData] = useState({ name: "", level: "P1" });
 
-            // 考核包创建状态（此处已明确定义，全局可用！）
+            // 考核包创建状态
             const [isCreatingTpl, setIsCreatingTpl] = useState(false);
             const [newTplName, setNewTplName] = useState("");
             const [newTplRules, setNewTplRules] = useState([]);
@@ -251,12 +249,7 @@
                     if(dept.lead) processUser(dept.lead);
                     dept.groups?.forEach(g => g.members.forEach(processUser));
                 });
-                return { 
-                    headcount, 
-                    riskCount, 
-                    totalMonthlyCost: totalMonthlyCost.toLocaleString(), 
-                    avgScore: validScoreCount ? (totalScore/validScoreCount).toFixed(1) : 0 
-                };
+                return { headcount, riskCount, totalMonthlyCost: totalMonthlyCost.toLocaleString(), avgScore: validScoreCount ? (totalScore/validScoreCount).toFixed(1) : 0 };
             };
 
             const fetchSiliconFlowAPI = async (systemPrompt, userPrompt) => {
@@ -281,6 +274,19 @@
                         return { ...dept, groups: dept.groups.map(g => ({ ...g, members: g.members.map(m => m.id === updatedUser.id ? updatedUser : m) })) };
                     });
                 }
+                setData(newData);
+            };
+
+            // ========== 显隐状态引擎 ==========
+            const toggleLeadHidden = (deptId, isHidden) => {
+                let newData = { ...data };
+                newData.departments.find(d => d.id === deptId).isLeadHidden = isHidden;
+                setData(newData);
+            };
+
+            const toggleGroupHidden = (deptId, groupTitle, isHidden) => {
+                let newData = { ...data };
+                newData.departments.find(d => d.id === deptId).groups.find(g => g.title === groupTitle).isHidden = isHidden;
                 setData(newData);
             };
 
@@ -313,8 +319,6 @@
                 if (role.includes('运营')) return { dept: '市场运营部', group: '运营' };
                 
                 if (role.includes('测') || role.includes('qa')) return { dept: '测试部', group: '测试执行' };
-                
-                // Fallback: 如果名字极其奇葩，强制归入市场运营部并使用它的原名建组，防丢失
                 return { dept: '市场运营部', group: roleStr }; 
             };
 
@@ -383,7 +387,7 @@
                                 } else {
                                     let targetGroup = targetDept.groups.find(g => g.title === targetLoc.group);
                                     if (!targetGroup) {
-                                        targetGroup = { title: targetLoc.group, members: [] };
+                                        targetGroup = { title: targetLoc.group, isHidden: false, members: [] };
                                         targetDept.groups.push(targetGroup);
                                     }
                                     targetGroup.members.push(newEmp);
@@ -398,13 +402,12 @@
                 reader.readAsArrayBuffer(file);
             };
 
-            // ========== 子集与 HC 管理 ==========
             const addGroup = (deptId) => {
                 const name = prompt("请输入要新增的业务线或子集架构名称：");
                 if (name && name.trim()) {
                     let newData = { ...data };
                     const dept = newData.departments.find(d => d.id === deptId);
-                    if (dept) dept.groups.push({ title: name.trim(), members: [] });
+                    if (dept) dept.groups.push({ title: name.trim(), isHidden: false, members: [] });
                     setData(newData);
                 }
             };
@@ -426,11 +429,7 @@
                     id: "hc_" + Date.now(),
                     name: `${hcData.name} ${hcData.level} (待招)`,
                     role: hcData.name,
-                    isVacant: true,
-                    type: "待入职",
-                    talentTag: "待招HC",
-                    score: 100,
-                    behaviors: []
+                    isVacant: true, type: "待入职", talentTag: "待招HC", score: 100, behaviors: []
                 };
 
                 let newData = { ...data };
@@ -453,24 +452,19 @@
                 setData(newData);
             };
 
-            // ========== 考核包模板管理 ==========
-            const handleDeleteTemplate = (id) => {
-                setScoringTemplates(scoringTemplates.filter(t => t.id !== id));
-            };
-
+            const handleDeleteTemplate = (id) => { setScoringTemplates(scoringTemplates.filter(t => t.id !== id)); };
             const handleAddDraftRule = () => {
                 if (!draftRuleName.trim() || !draftRulePenalty) return;
                 setNewTplRules([...newTplRules, { id: `r_${Math.random()}`, name: draftRuleName, penalty: Number(draftRulePenalty), type: Number(draftRulePenalty) < 0 ? "negative" : "positive", tags: [] }]);
                 setDraftRuleName(""); setDraftRulePenalty("");
             };
-
             const handleSaveNewTemplate = () => {
                 if (!newTplName.trim()) return alert("请输入名称");
                 setScoringTemplates([...scoringTemplates, { id: `tpl_${Math.random()}`, name: newTplName, rules: newTplRules }]);
                 setIsCreatingTpl(false); setNewTplName(""); setNewTplRules([]);
             };
 
-            // ========== 原生拖拽引擎 ==========
+            // ========== 深拷贝级别的 DND 拖拽引擎 ==========
             const handleDragStart = (e, deptId, groupTitle, user) => {
                 dragRef.current = { deptId, groupTitle, user };
                 e.dataTransfer.effectAllowed = "move";
@@ -483,32 +477,40 @@
                 const source = dragRef.current;
                 if (!source) return;
 
-                let newData = { ...data };
+                // 使用完全深拷贝来避免 React 状态引用冲突
+                let newData = JSON.parse(JSON.stringify(data)); 
                 let draggedUser = { ...source.user }; 
 
+                // 从源结构中剥离卡片
                 newData.departments.forEach(dept => {
                     if (dept.id === source.deptId) {
                         if (source.groupTitle === 'lead') dept.lead = null;
-                        else dept.groups.find(g => g.title === source.groupTitle).members = dept.groups.find(g => g.title === source.groupTitle).members.filter(m => m.id !== draggedUser.id);
+                        else {
+                            const g = dept.groups.find(x => x.title === source.groupTitle);
+                            if(g) g.members = g.members.filter(m => m.id !== draggedUser.id);
+                        }
                     }
                 });
 
+                // 更新头衔
                 draggedUser.role = targetGroupTitle === 'lead' ? '部门负责人' : targetGroupTitle; 
                 
+                // 植入目标结构
                 newData.departments.forEach(dept => {
                     if (dept.id === targetDeptId) {
                         if (targetGroupTitle === 'lead') dept.lead = draggedUser;
                         else {
                             let g = dept.groups.find(x => x.title === targetGroupTitle);
-                            if (targetIndex === -1) g.members.push(draggedUser);
-                            else g.members.splice(targetIndex, 0, draggedUser);
+                            if (g) {
+                                if (targetIndex === -1) g.members.push(draggedUser);
+                                else g.members.splice(targetIndex, 0, draggedUser);
+                            }
                         }
                     }
                 });
                 setData(newData); dragRef.current = null;
             };
 
-            // ========== AI入职、解析与打分引擎 ==========
             const handleAiAddEmployee = async (e) => {
                 const file = e.target.files[0];
                 if (!file || !sfApiKey) return;
@@ -600,10 +602,10 @@
                 if(!resignReason) return alert("请填写原因");
                 setResignedStaff([...resignedStaff, {...selectedUser, resignDate: CURRENT_DATE.toISOString().split('T')[0], resignReason}]);
                 
-                const newData = { ...data };
-                newData.departments = newData.departments.map(dept => {
-                    if (dept.lead?.id === selectedUser.id) return { ...dept, lead: null };
-                    return { ...dept, groups: dept.groups.map(g => ({ ...g, members: g.members.filter(m => m.id !== selectedUser.id) })) };
+                let newData = { ...data };
+                newData.departments.forEach(dept => {
+                    if (dept.lead?.id === selectedUser.id) dept.lead = null;
+                    dept.groups.forEach(g => { g.members = g.members.filter(m => m.id !== selectedUser.id); });
                 });
                 setData(newData);
                 setIsDrawerOpen(false); setShowResignModal(false); setResignReason("");
@@ -638,12 +640,12 @@
                 // HC 待招卡片特调 UI
                 if (user.isVacant || user.talentTag === '待招HC') {
                     return (
-                        <div draggable onDragStart={(e)=>handleDragStart(e, deptId, groupTitle, user)} onDragEnd={handleDragEnd} onDragOver={handleDragOver} onDrop={(e)=>handleDrop(e, deptId, groupTitle, mIdx)} className="relative flex flex-col p-2.5 rounded-lg border border-dashed border-blue-500/50 bg-blue-950/20 opacity-80 group cursor-grab active:cursor-grabbing hover:bg-blue-900/30 transition-all">
+                        <div draggable onDragStart={(e)=>handleDragStart(e, deptId, groupTitle, user)} onDragEnd={handleDragEnd} onDragOver={handleDragOver} onDrop={(e)=>handleDrop(e, deptId, groupTitle, mIdx)} className="relative flex flex-col p-2.5 rounded-lg border border-dashed border-blue-500/50 bg-blue-950/20 opacity-80 group/hccard cursor-grab active:cursor-grabbing hover:bg-blue-900/30 transition-all">
                             <span className="text-[13px] font-bold text-blue-400">{user.name}</span>
                             <div className="flex gap-2 mt-1 items-center">
                                 <span className="bg-blue-500/20 text-blue-300 border border-blue-500/30 px-1.5 py-0.5 rounded text-[10px]">待招 HC</span>
                             </div>
-                            <button onClick={(e) => { e.stopPropagation(); removeHc(user.id); }} className="absolute top-2 right-2 text-slate-500 hover:text-red-400 opacity-0 group-hover:opacity-100"><X className="w-3 h-3"/></button>
+                            <button onClick={(e) => { e.stopPropagation(); removeHc(user.id); }} className="absolute top-2 right-2 text-slate-500 hover:text-red-400 opacity-0 group-hover/hccard:opacity-100"><X className="w-3 h-3"/></button>
                         </div>
                     );
                 }
@@ -670,7 +672,7 @@
                 const isPending = empDetails.status.includes('待入职');
 
                 return (
-                    <div draggable onDragStart={(e)=>handleDragStart(e, deptId, groupTitle, user)} onDragEnd={handleDragEnd} onDragOver={handleDragOver} onDrop={(e)=>handleDrop(e, deptId, groupTitle, mIdx)} onClick={() => {setSelectedUser(user); setIsDrawerOpen(true);}} className={`relative flex flex-col p-2.5 rounded-lg border transition-all ${classes} ${isPending ? 'opacity-75 border-dashed border-slate-500 bg-slate-900/60' : ''}`}>
+                    <div draggable onDragStart={(e)=>handleDragStart(e, deptId, groupTitle, user)} onDragEnd={handleDragEnd} onDragOver={handleDragOver} onDrop={(e)=>handleDrop(e, deptId, groupTitle, mIdx)} onClick={() => {setSelectedUser(user); setIsDrawerOpen(true);}} className={`relative flex flex-col p-2.5 rounded-lg border transition-all ${classes} ${isPending ? 'opacity-75 border-dashed border-slate-500 bg-slate-900/60' : ''} w-full`}>
                         {Icon}
                         <div className="flex justify-between items-center w-full mb-1.5">
                             <span className={`text-[14px] font-bold whitespace-nowrap transition-colors ${txtClass}`}>{user.name}</span>
@@ -716,7 +718,6 @@
                             const reasonKey = Object.keys(row).find(k => k.includes('原因') || k.includes('复盘'));
                             
                             if (!nameKey || !row[nameKey]) return; 
-                            
                             const empName = row[nameKey].toString().trim();
                             if(newResigned.find(r => r.name === empName)) return;
 
@@ -732,20 +733,14 @@
                         });
                         setResignedStaff(newResigned);
                         alert(`✅ 离职历史库导入成功！共新增 ${importedCount} 条记录。`);
-                    } catch (err) {
-                        alert("解析离职名单失败，报错详情: " + err.message);
-                    } finally {
-                        setIsImportingResigned(false);
-                        if(importResignRef.current) importResignRef.current.value = "";
-                    }
+                    } catch (err) { alert("解析离职名单失败: " + err.message); } 
+                    finally { setIsImportingResigned(false); if(importResignRef.current) importResignRef.current.value = ""; }
                 };
                 reader.readAsArrayBuffer(file);
             };
 
             const removeResignedStaff = (idToRemove) => {
-                if(window.confirm("确定要将此人从流失归档库中彻底抹除吗？")) {
-                    setResignedStaff(resignedStaff.filter(s => s.id !== idToRemove));
-                }
+                if(window.confirm("确定要将此人从流失归档库中彻底抹除吗？")) setResignedStaff(resignedStaff.filter(s => s.id !== idToRemove));
             };
 
             const handleResetData = () => {
@@ -799,43 +794,69 @@
                                 <div className="absolute top-full left-1/2 w-px h-10 bg-slate-700"></div>
                             </div>
 
-                            {/* 五大中心平行排列 */}
-                            <div className="flex gap-6 items-start justify-center">
-                                {data.departments.map(dept => (
-                                    <div key={dept.id} className={`${dept.isSpanning ? (dept.groups.length > 3 ? 'w-[850px]' : 'w-[650px]') : 'w-[250px]'} shrink-0 rounded-2xl border border-slate-700/60 bg-slate-900/40 flex flex-col shadow-xl`}>
-                                        <div className="p-2.5 font-bold text-[13px] tracking-widest bg-slate-800/80 text-slate-300 border-b border-slate-700/60 rounded-t-2xl flex justify-between items-center px-4">
-                                            <span>{dept.name}</span>
-                                            <button onClick={() => addGroup(dept.id)} className="text-slate-400 hover:text-white bg-slate-700 p-1 rounded" title="添加子集/业务线"><Plus className="w-3 h-3"/></button>
+                            {/* 五大中心平行排列 (采用自适应收缩容器 w-max + flex) */}
+                            <div className="flex gap-6 items-start justify-center flex-nowrap">
+                                {data.departments.map(dept => {
+                                    const visibleGroups = dept.groups.filter(g => !g.isHidden);
+                                    return (
+                                    <div key={dept.id} className="w-max min-w-[280px] shrink-0 rounded-2xl border border-slate-700/60 bg-slate-900/40 flex flex-col shadow-xl">
+                                        
+                                        {/* 部门表头与还原控制区 */}
+                                        <div className="p-3 font-bold text-[13px] tracking-widest bg-slate-800/80 text-slate-300 border-b border-slate-700/60 rounded-t-2xl flex justify-between items-center gap-4">
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <span>{dept.name}</span>
+                                                {/* 显示被隐藏的项目，点击可还原 */}
+                                                {dept.isLeadHidden && (
+                                                    <button onClick={() => toggleLeadHidden(dept.id, false)} className="flex items-center gap-1 text-[10px] font-normal bg-slate-700/50 hover:bg-slate-600 px-1.5 py-0.5 rounded text-slate-400" title="点击还原负责人"><Eye className="w-3 h-3"/>负责人</button>
+                                                )}
+                                                {dept.groups.filter(g => g.isHidden).map(g => (
+                                                    <button key={g.title} onClick={() => toggleGroupHidden(dept.id, g.title, false)} className="flex items-center gap-1 text-[10px] font-normal bg-slate-700/50 hover:bg-slate-600 px-1.5 py-0.5 rounded text-slate-400" title={`点击还原 ${g.title}`}><Eye className="w-3 h-3"/>{g.title}</button>
+                                                ))}
+                                            </div>
+                                            <button onClick={() => addGroup(dept.id)} className="text-slate-400 hover:text-white bg-slate-700 p-1 rounded shrink-0" title="添加新业务线/子集"><Plus className="w-3 h-3"/></button>
                                         </div>
+
                                         <div className="p-5 flex flex-col items-center relative">
                                             
                                             {/* 部门负责人 */}
-                                            <div className="w-56 mb-8 relative z-10 group" onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, dept.id, 'lead', -1)}>
-                                                {dept.lead ? (
-                                                    <><EmployeeCard user={dept.lead} deptId={dept.id} groupTitle="lead" mIdx={-1} /><div className="absolute left-1/2 top-full w-px h-8 bg-slate-600/50"></div></>
-                                                ) : (
-                                                    <div onClick={() => { setAddTarget({ deptId: dept.id, groupTitle: '负责人', isLead: true }); setShowAddEmpModal(true); }} className="p-4 border-2 border-dashed border-slate-700 rounded-lg flex justify-center items-center cursor-pointer hover:border-slate-500 hover:bg-slate-800/50 transition-all">
-                                                        <span className="text-xs text-slate-500 font-bold">+ 虚位以待 (负责人)</span>
-                                                    </div>
-                                                )}
-                                            </div>
+                                            {!dept.isLeadHidden && (
+                                                <div className="w-[240px] mb-8 relative z-10 group/leadbox" onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, dept.id, 'lead', -1)}>
+                                                    {dept.lead ? (
+                                                        <>
+                                                            <EmployeeCard user={dept.lead} deptId={dept.id} groupTitle="lead" mIdx={-1} />
+                                                            <button onClick={() => toggleLeadHidden(dept.id, true)} className="absolute -top-3 -right-3 bg-slate-800 border border-slate-600 p-1.5 rounded-full text-slate-400 hover:text-white opacity-0 group-hover/leadbox:opacity-100 transition-all z-20 shadow-lg" title="暂时隐藏空缺岗"><EyeOff className="w-3 h-3"/></button>
+                                                        </>
+                                                    ) : (
+                                                        <div className="relative">
+                                                            <div onClick={() => { setAddTarget({ deptId: dept.id, groupTitle: '负责人', isLead: true }); setShowAddEmpModal(true); }} className="p-4 border-2 border-dashed border-slate-700 rounded-lg flex justify-center items-center cursor-pointer hover:border-slate-500 hover:bg-slate-800/50 transition-all">
+                                                                <span className="text-xs text-slate-500 font-bold">+ 虚位以待 (负责人)</span>
+                                                            </div>
+                                                            <button onClick={(e) => { e.stopPropagation(); toggleLeadHidden(dept.id, true); }} className="absolute -top-3 -right-3 bg-slate-800 border border-slate-600 p-1.5 rounded-full text-slate-400 hover:text-white opacity-0 group-hover/leadbox:opacity-100 transition-all z-20 shadow-lg" title="暂时隐藏空缺岗"><EyeOff className="w-3 h-3"/></button>
+                                                        </div>
+                                                    )}
+                                                    <div className="absolute left-1/2 top-full w-px h-8 bg-slate-600/50 pointer-events-none"></div>
+                                                </div>
+                                            )}
 
-                                            {/* 横向分支连线 (仅针对多组且Spanning) */}
-                                            {dept.isSpanning && dept.groups.length > 1 && (
-                                                <div className="w-[85%] border-t border-slate-600/50 relative h-6">
-                                                    {dept.groups.map((_, i) => (
-                                                        <div key={i} className="absolute top-0 w-px h-6 bg-slate-600/50" style={{ left: `${(i / (dept.groups.length - 1)) * 100}%` }}></div>
+                                            {/* 横向分支连线 (基于组的跨度动态拉伸) */}
+                                            {dept.isSpanning && !dept.isLeadHidden && visibleGroups.length > 1 && (
+                                                <div className="border-t border-slate-600/50 relative h-6" style={{ width: `calc(100% - 240px)` }}>
+                                                    {visibleGroups.map((_, i, arr) => (
+                                                        <div key={i} className="absolute top-0 w-px h-6 bg-slate-600/50" style={{ left: `${(i / (arr.length - 1)) * 100}%` }}></div>
                                                     ))}
                                                 </div>
                                             )}
 
-                                            {/* 各业务子组 */}
-                                            <div className={`w-full ${dept.isSpanning ? `grid grid-cols-${dept.groups.length > 4 ? 4 : dept.groups.length} gap-4` : 'flex flex-col gap-6'}`}>
-                                                {dept.groups.map((g, idx) => (
-                                                    <div key={idx} className="flex flex-col gap-2 min-h-[100px] pb-4 group/box" onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, dept.id, g.title, -1)}>
+                                            {/* 各业务子组 (固定宽度 240px 防拉伸) */}
+                                            <div className={`w-full flex justify-center gap-6 ${dept.isSpanning ? 'flex-row' : 'flex-col items-center'}`}>
+                                                {visibleGroups.map((g) => (
+                                                    <div key={g.title} className="w-[240px] flex flex-col gap-2 min-h-[100px] pb-4 group/box" onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, dept.id, g.title, -1)}>
                                                         <div className="text-[11px] font-bold text-slate-400 flex justify-between items-center bg-slate-950/80 rounded-md px-2 py-1.5 border border-slate-800">
-                                                            <span>{g.title}</span>
-                                                            <button onClick={() => removeGroup(dept.id, g.title)} className="text-slate-600 hover:text-red-400 opacity-0 group-hover/box:opacity-100 transition-all"><Trash2 className="w-3 h-3"/></button>
+                                                            <span className="truncate pr-2" title={g.title}>{g.title}</span>
+                                                            <div className="flex gap-1.5 opacity-0 group-hover/box:opacity-100 transition-all shrink-0">
+                                                                <button onClick={() => toggleGroupHidden(dept.id, g.title, true)} className="text-slate-500 hover:text-slate-300" title="隐藏该架构"><EyeOff className="w-3 h-3"/></button>
+                                                                <button onClick={() => removeGroup(dept.id, g.title)} className="text-slate-500 hover:text-red-400" title="彻底删除"><Trash2 className="w-3 h-3"/></button>
+                                                            </div>
                                                         </div>
                                                         {g.members.map((m, mIdx) => (
                                                             <EmployeeCard key={m.id} user={m} deptId={dept.id} groupTitle={g.title} mIdx={mIdx} />
@@ -852,7 +873,8 @@
 
                                         </div>
                                     </div>
-                                ))}
+                                    )
+                                })}
                             </div>
                             
                             {/* --- 离职库与批量导入区 --- */}
@@ -938,7 +960,7 @@
                         </div>
                     )}
 
-                    {/* === 侧边抽屉: 员工详情 (全面恢复了 5 大核心功能模块) === */}
+                    {/* === 侧边抽屉: 员工详情 === */}
                     {isDrawerOpen && selectedUser && (
                         <>
                             <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-40 transition-opacity" onClick={() => setIsDrawerOpen(false)}></div>
