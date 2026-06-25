@@ -31,12 +31,13 @@
     <script type="text/babel" data-type="module">
         import React, { useState, useEffect, useRef } from 'react';
         import { createRoot } from 'react-dom/client';
+        // 确保所有用到的图标都在此处准确导入
         import { 
             Activity, AlertTriangle, BrainCircuit, Briefcase, Calendar, ChevronDown,
             DownloadCloud, Edit2, FileCog, FileSpreadsheet, GraduationCap, Key,
             LineChart, Loader2, PieChart, Plus, RotateCcw, Save, SearchX,
             ShieldAlert, Sparkles, Target, Trash2, UploadCloud, UserCircle2, UserMinus,
-            UserPlus, Users, X
+            UserPlus, Users, X, Settings
         } from 'lucide-react';
 
         const CURRENT_DATE = new Date('2026-06-18');
@@ -200,7 +201,7 @@
             const [addTarget, setAddTarget] = useState(null); 
             const [hcData, setHcData] = useState({ name: "", level: "P1" });
 
-            // 考核包创建状态
+            // 考核包创建状态（此处已明确定义，全局可用！）
             const [isCreatingTpl, setIsCreatingTpl] = useState(false);
             const [newTplName, setNewTplName] = useState("");
             const [newTplRules, setNewTplRules] = useState([]);
@@ -224,13 +225,25 @@
             const [selectedRule, setSelectedRule] = useState(null);
             const [observation, setObservation] = useState("");
             const [manualScoreChange, setManualScoreChange] = useState(""); 
+            
+            const [strategyInput, setStrategyInput] = useState("");
+            const [strategyReport, setStrategyReport] = useState(null);
+            const [isStrategyLoading, setIsStrategyLoading] = useState(false);
 
             const getTeamMetrics = () => {
-                let headcount = 0, riskCount = 0;
+                let headcount = 0, riskCount = 0, totalMonthlyCost = 0, totalScore = 0, validScoreCount = 0;
                 const processUser = (u) => {
                     if (u && !u.isVacant && !(u.type && u.type.includes('待入职'))) {
                         headcount++;
-                        if (Number(u.score) < 80) riskCount++;
+                        if (Number(u.score) !== undefined) {
+                            totalScore += Number(u.score);
+                            validScoreCount++;
+                            if (Number(u.score) < 80) riskCount++;
+                        }
+                        if (u.salary && u.salary !== "未知" && !u.salary.includes("天") && !u.salary.includes("保密")) {
+                            const num = parseInt(u.salary.toString().replace(/,/g, ''), 10);
+                            if (!isNaN(num) && num > 1000) totalMonthlyCost += num;
+                        }
                     }
                 };
                 processUser(data.producer);
@@ -238,7 +251,12 @@
                     if(dept.lead) processUser(dept.lead);
                     dept.groups?.forEach(g => g.members.forEach(processUser));
                 });
-                return { headcount, riskCount };
+                return { 
+                    headcount, 
+                    riskCount, 
+                    totalMonthlyCost: totalMonthlyCost.toLocaleString(), 
+                    avgScore: validScoreCount ? (totalScore/validScoreCount).toFixed(1) : 0 
+                };
             };
 
             const fetchSiliconFlowAPI = async (systemPrompt, userPrompt) => {
@@ -871,13 +889,21 @@
                     {/* === Tab 2: AI HRBP 策略中枢 === */}
                     {activeTab === 'strategy' && (
                         <div className="max-w-[1200px] pb-20 animate-in fade-in duration-500">
-                            {/* 之前这里也有一个组件遗漏，已补齐 */}
                             <div className="grid grid-cols-4 gap-4 mb-6">
                                 <div className="bg-slate-900 border border-slate-700/60 p-5 rounded-xl shadow-lg">
                                     <div className="flex items-center gap-2 text-slate-400 text-xs mb-2"><Users className="w-4 h-4"/> 团队在岗总人数</div>
                                     <div className="text-3xl font-bold text-white">{getTeamMetrics().headcount} <span className="text-sm font-normal text-slate-500">人</span></div>
                                 </div>
                                 <div className="bg-slate-900 border border-slate-700/60 p-5 rounded-xl shadow-lg">
+                                    <div className="flex items-center gap-2 text-slate-400 text-xs mb-2"><LineChart className="w-4 h-4"/> 预估月度基本硬成本</div>
+                                    <div className="text-3xl font-bold text-emerald-400">¥ {getTeamMetrics().totalMonthlyCost}</div>
+                                    <div className="text-[10px] text-slate-500 mt-1">基于大盘数据粗算，不含绩效</div>
+                                </div>
+                                <div className="bg-slate-900 border border-slate-700/60 p-5 rounded-xl shadow-lg">
+                                    <div className="flex items-center gap-2 text-slate-400 text-xs mb-2"><PieChart className="w-4 h-4"/> 团队平均效能健康度</div>
+                                    <div className="text-3xl font-bold text-blue-400">{getTeamMetrics().avgScore} <span className="text-sm font-normal text-slate-500">分</span></div>
+                                </div>
+                                <div className="bg-red-950/20 border border-red-900/40 p-5 rounded-xl shadow-lg">
                                     <div className="flex items-center gap-2 text-red-400/80 text-xs mb-2"><ShieldAlert className="w-4 h-4"/> 状态异常/高危人数</div>
                                     <div className="text-3xl font-bold text-red-400">{getTeamMetrics().riskCount} <span className="text-sm font-normal text-red-500/70">人 (&lt;80分)</span></div>
                                 </div>
