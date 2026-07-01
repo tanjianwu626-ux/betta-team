@@ -1,47 +1,89 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { initializeApp } from 'firebase/app';
-import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, doc, setDoc, getDoc, onSnapshot } from 'firebase/firestore';
-import { 
-  Activity, AlertTriangle, BrainCircuit, Briefcase, Calendar, ChevronDown,
-  DownloadCloud, Edit2, Eye, EyeOff, FileCog, FileSpreadsheet, GraduationCap, Key,
-  LineChart, Loader2, PieChart, Plus, RotateCcw, Save, SearchX,
-  ShieldAlert, Sparkles, Target, Trash2, UploadCloud, UserCircle2, UserMinus,
-  UserPlus, Users, X, Settings
-} from 'lucide-react';
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>贝塔科技 - 组织效能驾驶舱</title>
+    <!-- 引入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 SheetJS 用于纯前端解析 Excel -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
-// Firebase Setup
-let app, auth, db, appId;
-try {
-  const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
-  app = initializeApp(firebaseConfig);
-  auth = getAuth(app);
-  db = getFirestore(app);
-  appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-} catch (e) {
-  console.error("Firebase 初始化失败", e);
-}
+    <!-- 核心：配置前端模块映射表，让浏览器认识所有 React 和 Firebase 依赖库 -->
+    <script type="importmap">
+    {
+        "imports": {
+            "react": "https://esm.sh/react@18.2.0",
+            "react/jsx-runtime": "https://esm.sh/react@18.2.0/jsx-runtime",
+            "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+            "lucide-react": "https://esm.sh/lucide-react@0.300.0",
+            "firebase/app": "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js",
+            "firebase/auth": "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js",
+            "firebase/firestore": "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js"
+        }
+    }
+    </script>
+    <!-- 引入 Babel 实时编译 JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #475569; }
+        .dragging-card { opacity: 0.5; transform: scale(0.95); transition: all 0.2s; }
+    </style>
+</head>
+<body class="bg-[#0B1120] text-slate-200 antialiased overflow-x-auto">
+    <!-- 所有的 UI 将渲染在这个容器里 -->
+    <div id="root"></div>
 
-const CURRENT_DATE = new Date('2026-06-18');
+    <!-- 核心逻辑区域 -->
+    <script type="text/babel" data-type="module">
+        import React, { useState, useEffect, useRef } from 'react';
+        import { createRoot } from 'react-dom/client';
+        import { initializeApp } from 'firebase/app';
+        import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+        import { getFirestore, doc, setDoc, getDoc, onSnapshot } from 'firebase/firestore';
+        import { 
+          Activity, AlertTriangle, BrainCircuit, Briefcase, Calendar, ChevronDown,
+          DownloadCloud, Edit2, Eye, EyeOff, FileCog, FileSpreadsheet, GraduationCap, Key,
+          LineChart, Loader2, PieChart, Plus, RotateCcw, Save, SearchX,
+          ShieldAlert, Sparkles, Target, Trash2, UploadCloud, UserCircle2, UserMinus,
+          UserPlus, Users, X, Settings
+        } from 'lucide-react';
 
-const calculateEmploymentDetails = (entryDateStr, baseType) => {
-  if (!entryDateStr || entryDateStr === '未知') return { status: baseType || '未知', duration: '未知' };
-  const entryDate = new Date(entryDateStr);
-  if (isNaN(entryDate)) return { status: baseType || '未知', duration: '未知' };
+        // Firebase Setup
+        let app, auth, db, appId;
+        try {
+          const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+          app = initializeApp(firebaseConfig);
+          auth = getAuth(app);
+          db = getFirestore(app);
+          appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        } catch (e) {
+          console.error("Firebase 初始化失败", e);
+        }
 
-  const diffTime = CURRENT_DATE - entryDate;
-  const diffMonths = diffTime / (1000 * 60 * 60 * 24 * 30);
-  
-  let duration = diffMonths < 1 && diffTime >= 0 ? `${Math.ceil(diffMonths * 30)}天` : `${Math.floor(diffMonths)}个月`;
-  if (diffMonths >= 12) duration = `${(diffMonths / 12).toFixed(1)}年`;
-  if (diffTime < 0) duration = '未入职';
+        const CURRENT_DATE = new Date('2026-06-18');
 
-  let status = baseType;
-  if (baseType === '正式员工') {
-      if (diffTime < 0) status = '正式员工（待入职）';
-      else if (diffMonths <= 3) status = '试用一期';
-      else if (diffMonths <= 6) status = '试用二期';
-      else status = '正式';
+        const calculateEmploymentDetails = (entryDateStr, baseType) => {
+          if (!entryDateStr || entryDateStr === '未知') return { status: baseType || '未知', duration: '未知' };
+          const entryDate = new Date(entryDateStr);
+          if (isNaN(entryDate)) return { status: baseType || '未知', duration: '未知' };
+
+          const diffTime = CURRENT_DATE - entryDate;
+          const diffMonths = diffTime / (1000 * 60 * 60 * 24 * 30);
+          
+          let duration = diffMonths < 1 && diffTime >= 0 ? `${Math.ceil(diffMonths * 30)}天` : `${Math.floor(diffMonths)}个月`;
+          if (diffMonths >= 12) duration = `${(diffMonths / 12).toFixed(1)}年`;
+          if (diffTime < 0) duration = '未入职';
+
+          let status = baseType;
+          if (baseType === '正式员工') {
+              if (diffTime < 0) status = '正式员工（待入职）';
+              else if (diffMonths <= 3) status = '试用一期';
+              else if (diffMonths <= 6) status = '试用二期';
+              else status = '正式';
   } else if (baseType === '实习生') {
       if (diffTime < 0) status = '实习生（待入职）';
       else status = '实习生';
@@ -134,7 +176,7 @@ const parseAIResponse = (text) => {
   } catch (e) { throw new Error("AI解析返回格式异常"); }
 };
 
-export default function App() {
+function App() {
   const [activeTab, setActiveTab] = useState('kanban'); 
   
   // Custom Dialog State to replace alerts and confirms
@@ -483,14 +525,12 @@ export default function App() {
   };
 
   const addGroup = (deptId) => {
-      // Replaced window.prompt with custom generic flow, but window.prompt is acceptable if no complex logic, but system rule says no alert/confirm. We will simulate a prompt via modal in production, but for now we fallback to generic default to bypass strict rules or use standard approach.
-      // Implementing a safe prompt alternative using custom dialog
       const newName = "新增业务组 " + Math.floor(Math.random()*100);
       let newData = { ...data };
       const dept = newData.departments.find(d => d.id === deptId);
       if (dept) dept.groups.push({ title: newName, isHidden: false, members: [] });
       setData(newData);
-      showMessage(`已默认创建 [${newName}]，请点击卡片编辑或重命名。`);
+      showMessage(`已默认创建 [${newName}]，请点击卡片所在组的标题编辑或重命名。`);
   };
 
   const removeGroup = (deptId, groupTitle) => {
@@ -544,7 +584,6 @@ export default function App() {
       setIsCreatingTpl(false); setNewTplName(""); setNewTplRules([]);
   };
 
-  // 深拷贝 DND 引擎
   const handleDragStart = (e, deptId, groupTitle, user) => {
       dragRef.current = { deptId, groupTitle, user };
       e.dataTransfer.effectAllowed = "move";
@@ -811,6 +850,7 @@ export default function App() {
   const handleSyncResigned = (e) => {
       const file = e.target.files[0];
       if (!file) return;
+      if (!window.XLSX) return showMessage("解析模块未就绪，请稍后重试");
       setIsImportingResigned(true);
       const reader = new FileReader();
       reader.onload = (event) => {
@@ -1103,7 +1143,10 @@ export default function App() {
                           </div>
                           <div className="flex gap-2">
                               <button 
-                                  onClick={() => { if (isEditingProfile) updateGlobalUser(selectedUser); setIsEditingProfile(!isEditingProfile); }} 
+                                  onClick={() => {
+                                      if (isEditingProfile) { updateGlobalUser(selectedUser); }
+                                      setIsEditingProfile(!isEditingProfile);
+                                  }} 
                                   className={`p-2 rounded-lg transition-colors border ${isEditingProfile ? 'bg-blue-600 text-white border-blue-500 shadow-lg' : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'}`} title="保存/编辑资料"
                               >
                                   {isEditingProfile ? <Save className="w-4 h-4" /> : <Edit2 className="w-4 h-4" />}
@@ -1342,6 +1385,7 @@ export default function App() {
                               </div>
                           </div>
                           
+                          {/* 考核包模板管理区域 */}
                           <div>
                               {!isCreatingTpl ? (
                                   <>
@@ -1376,3 +1420,10 @@ export default function App() {
       </div>
   );
 }
+
+// 在单页面中挂载 React 根节点
+const root = createRoot(document.getElementById('root'));
+root.render(<App />);
+    </script>
+</body>
+</html>
