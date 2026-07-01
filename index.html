@@ -9,7 +9,7 @@
     <!-- 引入 SheetJS 用于纯前端解析 Excel -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
-    <!-- 核心：配置前端模块映射表，让浏览器认识所有 React 和 Firebase 依赖库 -->
+    <!-- 配置前端模块映射表，让浏览器原生支持 import -->
     <script type="importmap">
     {
         "imports": {
@@ -84,123 +84,123 @@
               else if (diffMonths <= 3) status = '试用一期';
               else if (diffMonths <= 6) status = '试用二期';
               else status = '正式';
-  } else if (baseType === '实习生') {
-      if (diffTime < 0) status = '实习生（待入职）';
-      else status = '实习生';
-  } else if (baseType === '正式员工（已转正）' || baseType === '正式') {
-      status = '正式';
-  } else {
-      status = baseType;
-  }
-  return { status, duration };
-};
+          } else if (baseType === '实习生') {
+              if (diffTime < 0) status = '实习生（待入职）';
+              else status = '实习生';
+          } else if (baseType === '正式员工（已转正）' || baseType === '正式') {
+              status = '正式';
+          } else {
+              status = baseType;
+          }
+          return { status, duration };
+        };
 
-const getStatusBadge = (status) => {
-  if (status === '正式') return <span className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-1.5 py-0.5 rounded text-[10px]">正式员工</span>;
-  if (status === '试用一期') return <span className="bg-orange-500/20 text-orange-400 border border-orange-500/30 px-1.5 py-0.5 rounded text-[10px]">试用(一期)</span>;
-  if (status === '试用二期') return <span className="bg-amber-500/20 text-amber-400 border border-amber-500/30 px-1.5 py-0.5 rounded text-[10px]">试用(二期)</span>;
-  if (status === '实习生（待入职）') return <span className="bg-slate-500/20 text-slate-400 border border-slate-500/50 px-1.5 py-0.5 rounded text-[10px] border-dashed">实习(待入职)</span>;
-  if (status === '正式员工（待入职）') return <span className="bg-slate-500/20 text-slate-400 border border-slate-500/50 px-1.5 py-0.5 rounded text-[10px] border-dashed">正式(待入职)</span>;
-  if (status === '实习' || status === '实习生') return <span className="bg-sky-500/20 text-sky-400 border border-sky-500/30 px-1.5 py-0.5 rounded text-[10px]">实习生</span>;
-  if (status === '外派') return <span className="bg-purple-500/20 text-purple-400 border border-purple-500/30 px-1.5 py-0.5 rounded text-[10px]">外派员工</span>;
-  return <span className="bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded text-[10px]">{status || '未知'}</span>;
-};
+        const getStatusBadge = (status) => {
+          if (status === '正式') return <span className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-1.5 py-0.5 rounded text-[10px]">正式员工</span>;
+          if (status === '试用一期') return <span className="bg-orange-500/20 text-orange-400 border border-orange-500/30 px-1.5 py-0.5 rounded text-[10px]">试用(一期)</span>;
+          if (status === '试用二期') return <span className="bg-amber-500/20 text-amber-400 border border-amber-500/30 px-1.5 py-0.5 rounded text-[10px]">试用(二期)</span>;
+          if (status === '实习生（待入职）') return <span className="bg-slate-500/20 text-slate-400 border border-slate-500/50 px-1.5 py-0.5 rounded text-[10px] border-dashed">实习(待入职)</span>;
+          if (status === '正式员工（待入职）') return <span className="bg-slate-500/20 text-slate-400 border border-slate-500/50 px-1.5 py-0.5 rounded text-[10px] border-dashed">正式(待入职)</span>;
+          if (status === '实习' || status === '实习生') return <span className="bg-sky-500/20 text-sky-400 border border-sky-500/30 px-1.5 py-0.5 rounded text-[10px]">实习生</span>;
+          if (status === '外派') return <span className="bg-purple-500/20 text-purple-400 border border-purple-500/30 px-1.5 py-0.5 rounded text-[10px]">外派员工</span>;
+          return <span className="bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded text-[10px]">{status || '未知'}</span>;
+        };
 
-const defaultScoringTemplates = [
-  { id: "tpl_level_intern", name: "通用考核标准 (示例)", rules: [{ id: "r1", name: "单次不达标", penalty: -5, type: "negative", tags: ["执行力不足"] }] }
-];
+        const defaultScoringTemplates = [
+          { id: "tpl_level_intern", name: "通用考核标准 (示例)", rules: [{ id: "r1", name: "单次不达标", penalty: -5, type: "negative", tags: ["执行力不足"] }] }
+        ];
 
-const initialTeamArchitecture = {
-  producer: { id: "p1", name: "任光谦", role: "制作人", type: "正式员工", entryDate: "2020-03-01", score: 100, talentTag: "核心骨干", age: 34, school: "武汉大学", education: "本科", salary: "100000" },
-  departments: [
-      {
-          id: "dept_design", name: "策划部", isSpanning: true, isLeadHidden: false,
-          lead: { id: "c1", name: "陈冠兰", role: "主策划", type: "正式员工", entryDate: "2021-06-15", score: 100, talentTag: "主子背", education: "本科", salary: "35000" },
-          groups: [
-              { title: "系统策划", isHidden: false, members: [
-                  { id: "c2", name: "朱琰", role: "系统策划", type: "正式员工", entryDate: "2023-05-10", score: 100, education: "本科", salary: "18000" },
-                  { id: "c4", name: "王琳轲", role: "系统策划", type: "正式员工（待入职）", entryDate: "2026-07-01", score: 100, talentTag: "", education: "本科", salary: "15000" }
-              ]},
-              { title: "数值策划", isHidden: false, members: [ { id: "c8", name: "蔡玉林", role: "数值策划", type: "正式员工", entryDate: "2023-08-20", score: 100, talentTag: "高潜", education: "硕士", salary: "28000" } ]},
-              { title: "活动策划", isHidden: false, members: [ { id: "c6", name: "李青玉", role: "活动策划", type: "正式员工", entryDate: "2025-02-14", score: 100, education: "本科", salary: "14000" } ]},
-              { title: "关卡策划", isHidden: false, members: [ { id: "c9", name: "王昶越", role: "关卡组长", type: "正式员工", entryDate: "2022-04-10", score: 100, talentTag: "核心骨干", education: "本科", salary: "25000" } ]}
+        const initialTeamArchitecture = {
+          producer: { id: "p1", name: "任光谦", role: "制作人", type: "正式员工", entryDate: "2020-03-01", score: 100, talentTag: "核心骨干", age: 34, school: "武汉大学", education: "本科", salary: "100000" },
+          departments: [
+              {
+                  id: "dept_design", name: "策划部", isSpanning: true, isLeadHidden: false,
+                  lead: { id: "c1", name: "陈冠兰", role: "主策划", type: "正式员工", entryDate: "2021-06-15", score: 100, talentTag: "主子背", education: "本科", salary: "35000" },
+                  groups: [
+                      { title: "系统策划", isHidden: false, members: [
+                          { id: "c2", name: "朱琰", role: "系统策划", type: "正式员工", entryDate: "2023-05-10", score: 100, education: "本科", salary: "18000" },
+                          { id: "c4", name: "王琳轲", role: "系统策划", type: "正式员工（待入职）", entryDate: "2026-07-01", score: 100, talentTag: "", education: "本科", salary: "15000" }
+                      ]},
+                      { title: "数值策划", isHidden: false, members: [ { id: "c8", name: "蔡玉林", role: "数值策划", type: "正式员工", entryDate: "2023-08-20", score: 100, talentTag: "高潜", education: "硕士", salary: "28000" } ]},
+                      { title: "活动策划", isHidden: false, members: [ { id: "c6", name: "李青玉", role: "活动策划", type: "正式员工", entryDate: "2025-02-14", score: 100, education: "本科", salary: "14000" } ]},
+                      { title: "关卡策划", isHidden: false, members: [ { id: "c9", name: "王昶越", role: "关卡组长", type: "正式员工", entryDate: "2022-04-10", score: 100, talentTag: "核心骨干", education: "本科", salary: "25000" } ]}
+                  ]
+              },
+              {
+                  id: "dept_tech", name: "程序部", isSpanning: true, isLeadHidden: false,
+                  lead: { id: "t1", name: "戴佳文", role: "客户端主程", type: "正式员工", entryDate: "2022-01-05", score: 100, talentTag: "主子背", education: "本科", salary: "40000" },
+                  groups: [
+                      { title: "前端开发", isHidden: false, members: [ { id: "t2", name: "刘澎", role: "客户端开发", type: "正式员工", entryDate: "2024-03-10", score: 65, education: "本科", salary: "29000" } ]},
+                      { title: "后端开发", isHidden: false, members: [ { id: "t3", name: "白冰", role: "服务端开发", type: "正式员工", entryDate: "2025-10-15", score: 100, talentTag: "执行", education: "本科", salary: "25000" } ]}
+                  ]
+              },
+              {
+                  id: "dept_art", name: "美术部", isSpanning: true, isLeadHidden: false,
+                  lead: null,
+                  groups: [
+                      { title: "原画", isHidden: false, members: [ { id: "a4", name: "张蕴秀", role: "原画师", type: "正式员工", entryDate: "2023-02-15", score: 100, education: "本科", salary: "18000" } ]},
+                      { title: "UI", isHidden: false, members: [] },
+                      { title: "3D模型", isHidden: false, members: [] },
+                      { title: "动效", isHidden: false, members: [ { id: "a2", name: "孙伟轩", role: "动效设计师", type: "正式员工", entryDate: "2022-11-10", score: 100, education: "本科", salary: "22000" } ]}
+                  ]
+              },
+              {
+                  id: "dept_market", name: "市场运营部", isSpanning: true, isLeadHidden: false,
+                  lead: null,
+                  groups: [
+                      { title: "市场负责人", isHidden: false, members: [] },
+                      { title: "优化师", isHidden: false, members: [ { id: "m4", name: "张卓良", role: "投放优化师", type: "正式员工", entryDate: "2024-09-01", score: 100, education: "本科", salary: "23000" } ]},
+                      { title: "平面设计", isHidden: false, members: [] },
+                      { title: "视频设计", isHidden: false, members: [ { id: "m1", name: "任博伟", role: "视频设计师", type: "正式员工", entryDate: "2023-06-20", score: 100, education: "本科", salary: "21000" } ]},
+                      { title: "运营负责人", isHidden: false, members: [] },
+                      { title: "运营", isHidden: false, members: [ { id: "m6", name: "邢昊阳", role: "游戏运营", type: "正式员工", entryDate: "2023-03-15", score: 100, education: "本科", salary: "18000" } ]}
+                  ]
+              },
+              {
+                  id: "dept_qa", name: "测试部", isSpanning: false, isLeadHidden: false,
+                  lead: { id: "q1", name: "刘禹杭", role: "测试组长", type: "正式员工", entryDate: "2023-07-01", score: 100, education: "本科", salary: "20000" },
+                  groups: [
+                      { title: "测试执行", isHidden: false, members: [ { id: "q2", name: "牟书含", role: "测试工程师", type: "正式员工", entryDate: "2024-08-10", score: 100, education: "本科", salary: "15000" } ]}
+                  ]
+              }
           ]
-      },
-      {
-          id: "dept_tech", name: "程序部", isSpanning: true, isLeadHidden: false,
-          lead: { id: "t1", name: "戴佳文", role: "客户端主程", type: "正式员工", entryDate: "2022-01-05", score: 100, talentTag: "主子背", education: "本科", salary: "40000" },
-          groups: [
-              { title: "前端开发", isHidden: false, members: [ { id: "t2", name: "刘澎", role: "客户端开发", type: "正式员工", entryDate: "2024-03-10", score: 65, education: "本科", salary: "29000" } ]},
-              { title: "后端开发", isHidden: false, members: [ { id: "t3", name: "白冰", role: "服务端开发", type: "正式员工", entryDate: "2025-10-15", score: 100, talentTag: "执行", education: "本科", salary: "25000" } ]}
-          ]
-      },
-      {
-          id: "dept_art", name: "美术部", isSpanning: true, isLeadHidden: false,
-          lead: null,
-          groups: [
-              { title: "原画", isHidden: false, members: [ { id: "a4", name: "张蕴秀", role: "原画师", type: "正式员工", entryDate: "2023-02-15", score: 100, education: "本科", salary: "18000" } ]},
-              { title: "UI", isHidden: false, members: [] },
-              { title: "3D模型", isHidden: false, members: [] },
-              { title: "动效", isHidden: false, members: [ { id: "a2", name: "孙伟轩", role: "动效设计师", type: "正式员工", entryDate: "2022-11-10", score: 100, education: "本科", salary: "22000" } ]}
-          ]
-      },
-      {
-          id: "dept_market", name: "市场运营部", isSpanning: true, isLeadHidden: false,
-          lead: null,
-          groups: [
-              { title: "市场负责人", isHidden: false, members: [] },
-              { title: "优化师", isHidden: false, members: [ { id: "m4", name: "张卓良", role: "投放优化师", type: "正式员工", entryDate: "2024-09-01", score: 100, education: "本科", salary: "23000" } ]},
-              { title: "平面设计", isHidden: false, members: [] },
-              { title: "视频设计", isHidden: false, members: [ { id: "m1", name: "任博伟", role: "视频设计师", type: "正式员工", entryDate: "2023-06-20", score: 100, education: "本科", salary: "21000" } ]},
-              { title: "运营负责人", isHidden: false, members: [] },
-              { title: "运营", isHidden: false, members: [ { id: "m6", name: "邢昊阳", role: "游戏运营", type: "正式员工", entryDate: "2023-03-15", score: 100, education: "本科", salary: "18000" } ]}
-          ]
-      },
-      {
-          id: "dept_qa", name: "测试部", isSpanning: false, isLeadHidden: false,
-          lead: { id: "q1", name: "刘禹杭", role: "测试组长", type: "正式员工", entryDate: "2023-07-01", score: 100, education: "本科", salary: "20000" },
-          groups: [
-              { title: "测试执行", isHidden: false, members: [ { id: "q2", name: "牟书含", role: "测试工程师", type: "正式员工", entryDate: "2024-08-10", score: 100, education: "本科", salary: "15000" } ]}
-          ]
-      }
-  ]
-};
+        };
 
-const parseAIResponse = (text) => {
-  try {
-      let cleanText = text.replace(/```json/gi, '').replace(/```/g, '').trim();
-      const firstBrace = cleanText.indexOf('{');
-      const lastBrace = cleanText.lastIndexOf('}');
-      if (firstBrace !== -1 && lastBrace !== -1) cleanText = cleanText.substring(firstBrace, lastBrace + 1);
-      return JSON.parse(cleanText);
-  } catch (e) { throw new Error("AI解析返回格式异常"); }
-};
+        const parseAIResponse = (text) => {
+          try {
+              let cleanText = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+              const firstBrace = cleanText.indexOf('{');
+              const lastBrace = cleanText.lastIndexOf('}');
+              if (firstBrace !== -1 && lastBrace !== -1) cleanText = cleanText.substring(firstBrace, lastBrace + 1);
+              return JSON.parse(cleanText);
+          } catch (e) { throw new Error("AI解析返回格式异常"); }
+        };
 
-function App() {
-  const [activeTab, setActiveTab] = useState('kanban'); 
-  
-  // Custom Dialog State to replace alerts and confirms
-  const [dialog, setDialog] = useState(null);
-  const showMessage = (msg) => setDialog({ type: 'alert', message: msg });
-  const showConfirm = (msg, onConfirm) => setDialog({ type: 'confirm', message: msg, onConfirm });
+        function App() {
+          const [activeTab, setActiveTab] = useState('kanban'); 
+          
+          // Custom Dialog State to replace alerts and confirms
+          const [dialog, setDialog] = useState(null);
+          const showMessage = (msg) => setDialog({ type: 'alert', message: msg });
+          const showConfirm = (msg, onConfirm) => setDialog({ type: 'confirm', message: msg, onConfirm });
 
-  // Core Data
-  const [data, setData] = useState(() => {
-      const saved = localStorage.getItem('beta_team_data');
-      if (saved) {
-          let parsed = JSON.parse(saved);
-          parsed.departments = parsed.departments.map(d => {
-              if (d.branches) { d.groups = d.branches; delete d.branches; }
-              if (d.roles) { d.groups = d.roles; delete d.roles; }
-              return d;
+          // Core Data
+          const [data, setData] = useState(() => {
+              const saved = localStorage.getItem('beta_team_data');
+              if (saved) {
+                  let parsed = JSON.parse(saved);
+                  parsed.departments = parsed.departments.map(d => {
+                      if (d.branches) { d.groups = d.branches; delete d.branches; }
+                      if (d.roles) { d.groups = d.roles; delete d.roles; }
+                      return d;
+                  });
+                  return parsed;
+              }
+              return initialTeamArchitecture;
           });
-          return parsed;
-      }
-      return initialTeamArchitecture;
-  });
-  const [resignedStaff, setResignedStaff] = useState(() => {
-      const saved = localStorage.getItem('beta_resigned_staff');
-      return saved ? JSON.parse(saved) : [];
+          const [resignedStaff, setResignedStaff] = useState(() => {
+              const saved = localStorage.getItem('beta_resigned_staff');
+              return saved ? JSON.parse(saved) : [];
   });
   const [scoringTemplates, setScoringTemplates] = useState(() => {
       const saved = localStorage.getItem('beta_scoring_tpl');
@@ -1421,7 +1421,6 @@ function App() {
   );
 }
 
-// 在单页面中挂载 React 根节点
 const root = createRoot(document.getElementById('root'));
 root.render(<App />);
     </script>
